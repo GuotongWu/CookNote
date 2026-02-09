@@ -14,6 +14,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock, ChevronLeft, Trash2, Edit3, Heart } from 'lucide-react-native';
 import { Recipe } from '../types/recipe';
+import { IngredientTag } from './IngredientTag';
+import { triggerImpact, triggerSuccess } from '../services/haptics';
 
 interface RecipeDetailModalProps {
   recipe: Recipe | null;
@@ -62,7 +64,11 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
             
             <View className="flex-row">
               <TouchableOpacity 
-                onPress={() => onToggleFavorite?.(recipe)}
+                onPress={() => {
+                  onToggleFavorite?.(recipe);
+                  if (!recipe.isFavorite) triggerSuccess();
+                  else triggerImpact();
+                }}
                 className={`p-2 mr-2 rounded-full ${recipe.isFavorite ? 'bg-red-50' : 'bg-gray-50'}`}
               >
                 <Heart 
@@ -73,7 +79,10 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
               </TouchableOpacity>
 
               <TouchableOpacity 
-                onPress={() => onEdit?.(recipe)}
+                onPress={() => {
+                  triggerImpact();
+                  onEdit?.(recipe);
+                }}
                 className="p-2 mr-2 bg-gray-50 rounded-full"
               >
                 <Edit3 size={22} color="#4B5563" />
@@ -81,6 +90,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
 
               <TouchableOpacity 
                 onPress={() => {
+                  triggerImpact();
                   const confirmed = Platform.OS === 'web' 
                     ? window.confirm('确定要从你的秘密食谱库中移除这个菜谱吗？')
                     : true; 
@@ -133,9 +143,13 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
               <Text className="text-xl font-bold text-gray-900 mb-4">主要原料</Text>
               <View className="flex-row flex-wrap mb-8">
                 {recipe.ingredients.map(ing => (
-                  <View key={ing.id} className="bg-[#FF6B6B]/10 px-4 py-2 rounded-xl mr-2 mb-2">
-                    <Text className="text-[#FF6B6B] font-medium">{ing.name}</Text>
-                  </View>
+                  <IngredientTag 
+                    key={ing.id} 
+                    name={ing.name} 
+                    amount={ing.amount}
+                    variant="primary"
+                    className="bg-[#FF6B6B]/10 border-transparent"
+                  />
                 ))}
               </View>
 

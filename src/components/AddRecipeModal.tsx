@@ -19,6 +19,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { Recipe, Ingredient, AISkillProvider, IngredientCategory } from '../types/recipe';
 import { MOCK_INGREDIENTS } from '../services/mockData';
 import { IngredientBrowser } from './IngredientBrowser';
+import { IngredientTag } from './IngredientTag';
+import { easeLayout, springLayout } from '../utils/animations';
+import { triggerSuccess, triggerImpact } from '../services/haptics';
 
 const CATEGORIES: IngredientCategory[] = ['肉禽类', '蔬菜类', '调料类', '海鲜类', '主食类', '其他'];
 
@@ -45,6 +48,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [selectedIngredients, setSelectedIngredients] = useState<Ingredient[]>([]);
   const [newIngredientName, setNewIngredientName] = useState('');
+  const [newIngredientAmount, setNewIngredientAmount] = useState(''); // 新增：自定义原料重量
   const [newIngredientCategory, setNewIngredientCategory] = useState<IngredientCategory>('肉禽类');
   const [steps, setSteps] = useState<string[]>([]);
   const [currentStep, setCurrentStep] = useState('');
@@ -56,7 +60,14 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       if (initialRecipe) {
         setName(initialRecipe.name);
         setImageUris(initialRecipe.imageUris || []);
-        setSelectedIngredients(initialRecipe.ingredients);
+        // 加载时清洗数据，确保重量仅为数字，处理历史遗留的 "500g" 等字符串
+        const sanitizedIngredients = (initialRecipe.ingredients || []).map(ing => ({
+          ...ing,
+          amount: typeof ing.amount === 'string' 
+            ? parseInt((ing.amount as string).replace(/[^0-9]/g, ''), 10) || undefined
+            : ing.amount
+        }));
+        setSelectedIngredients(sanitizedIngredients);
         setSteps(initialRecipe.steps || []);
         setIsFavorite(!!initialRecipe.isFavorite);
       } else {
@@ -96,7 +107,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         if (!result.canceled) {
           const newUris = result.assets.map(asset => asset.uri);
           setImageUris(prev => [...prev, ...newUris]);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          easeLayout();
         }
       } catch (error) {
         console.error('Pick image error:', error);
@@ -121,6 +132,14 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     });
   }, []);
 
+  const updateIngredientAmount = React.useCallback((id: string, text: string) => {
+    // 仅保留数字
+    const numericValue = text.replace(/[^0-9]/g, '');
+    setSelectedIngredients(prev => prev.map(ing => 
+      ing.id === id ? { ...ing, amount: numericValue ? parseInt(numericValue, 10) : undefined } : ing
+    ));
+  }, []);
+
   const handleAddNewIngredient = React.useCallback(() => {
     const trimmedName = newIngredientName.trim();
     if (!trimmedName) return;
@@ -131,17 +150,21 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setSelectedIngredients(prev => {
       if (prev.some(i => i.name === trimmedName)) return prev;
       
-      const newIng: Ingredient = existsInMock || {
+      const amount = newIngredientAmount ? parseInt(newIngredientAmount.replace(/[^0-9]/g, ''), 10) : undefined;
+      
+      const newIng: Ingredient = existsInMock ? { ...existsInMock, amount } : {
         id: `custom-${Date.now()}`,
         name: trimmedName,
-        category: newIngredientCategory
+        category: newIngredientCategory,
+        amount
       };
       
       return [...prev, newIng];
     });
 
     setNewIngredientName('');
-  }, [newIngredientName, newIngredientCategory]);
+    setNewIngredientAmount('');
+  }, [newIngredientName, newIngredientCategory, newIngredientAmount]);
 
   const addStep = React.useCallback(() => {
     if (currentStep.trim()) {
@@ -189,6 +212,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setImageUris([]);
     setSelectedIngredients([]);
     setNewIngredientName('');
+    setNewIngredientAmount('');
     setNewIngredientCategory('肉禽类');
     setSteps([]);
     setCurrentStep('');
@@ -291,8 +315,9 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
               </View>
               <TouchableOpacity 
                 onPress={() => {
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+                  springLayout();
                   setIsFavorite(!isFavorite);
+                  triggerImpact();
                 }}
                 className={`w-14 h-14 rounded-2xl items-center justify-center ${isFavorite ? 'bg-red-50' : 'bg-gray-100'}`}
               >
@@ -313,24 +338,37 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                 onToggle={toggleIngredient}
               />
 
-              {/* 已选标签展示 - 优化为更加 iOS 磁贴感 */}
+              {/* 已选标签展示 - 优化为带用量的列表 */}
               {selectedIngredients.length > 0 && (
-                <View className="flex-row flex-wrap mt-5">
+                <View className="mt-5 space-y-2">
                   {selectedIngredients.map((ing) => (
-                    <TouchableOpacity 
-                      key={ing.id}
-                      onPress={() => {
-                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                        toggleIngredient(ing);
-                      }}
-                      activeOpacity={0.7}
-                      className="mr-2.5 mb-2.5 px-3.5 py-2 rounded-2xl bg-gray-900 flex-row items-center"
+                    <View 
+                      key={ing.id} 
+                      className="flex-row items-center bg-gray-50 p-3 rounded-2xl border border-gray-100/50"
                     >
-                      <Text className="text-white text-xs font-bold tracking-wide">{ing.name}</Text>
-                      <View className="ml-2 bg-white/20 rounded-full p-0.5">
-                        <X size={10} color="white" />
+                      <View className="w-2 h-2 rounded-full bg-[#FF6B6B] mr-3" />
+                      <Text className="flex-1 text-gray-800 font-bold text-sm">{ing.name}</Text>
+                      <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2">
+                        <TextInput 
+                          placeholder="0"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="number-pad"
+                          className="text-xs w-10 text-gray-600 font-bold text-right"
+                          value={ing.amount?.toString() || ''}
+                          onChangeText={(text) => updateIngredientAmount(ing.id, text)}
+                        />
+                        <Text className="text-[10px] text-gray-400 ml-1 font-bold">克</Text>
                       </View>
-                    </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => {
+                          easeLayout();
+                          toggleIngredient(ing);
+                        }}
+                        className="bg-gray-200/50 p-1.5 rounded-full"
+                      >
+                        <X size={14} color="#6B7280" />
+                      </TouchableOpacity>
+                    </View>
                   ))}
                 </View>
               )}
@@ -339,12 +377,22 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
               <View className="mt-4 bg-gray-50 rounded-[28px] p-2 border border-gray-100">
                 <View className="flex-row items-center">
                   <TextInput 
-                    placeholder="输入自定义标签（如：羊肉）"
+                    placeholder="输入标签(如:羊肉)"
                     className="flex-1 px-4 py-3 text-sm text-gray-800"
                     value={newIngredientName}
                     onChangeText={setNewIngredientName}
                     placeholderTextColor="#9CA3AF"
                   />
+                  <View className="w-[1px] h-6 bg-gray-200" />
+                  <TextInput 
+                    placeholder="0"
+                    keyboardType="number-pad"
+                    className="w-12 px-2 py-3 text-sm text-[#FF6B6B] font-bold text-right"
+                    value={newIngredientAmount}
+                    onChangeText={(text) => setNewIngredientAmount(text.replace(/[^0-9]/g, ''))}
+                    placeholderTextColor="#9CA3AF"
+                  />
+                  <Text className="text-[10px] text-gray-400 mr-2 font-bold">克</Text>
                   <TouchableOpacity 
                     onPress={handleAddNewIngredient}
                     activeOpacity={0.8}
@@ -358,22 +406,16 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                   <View className="flex-row flex-wrap mt-2 px-2 pb-1">
                     <Text className="text-[10px] text-gray-400 font-bold mb-2 w-full ml-1">选择所属分类：</Text>
                     {CATEGORIES.map(cat => (
-                      <TouchableOpacity
+                      <IngredientTag
                         key={cat}
+                        name={cat}
+                        isSelected={newIngredientCategory === cat}
+                        variant="outline"
                         onPress={() => {
-                          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                          easeLayout();
                           setNewIngredientCategory(cat);
                         }}
-                        className={`mr-2 mb-2 px-3 py-1.5 rounded-full border ${
-                          newIngredientCategory === cat 
-                          ? 'bg-gray-900 border-gray-900' 
-                          : 'bg-white border-gray-100'
-                        }`}
-                      >
-                        <Text className={`text-[10px] font-bold ${
-                          newIngredientCategory === cat ? 'text-white' : 'text-gray-500'
-                        }`}>{cat}</Text>
-                      </TouchableOpacity>
+                      />
                     ))}
                   </View>
                 )}

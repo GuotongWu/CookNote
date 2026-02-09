@@ -33,6 +33,7 @@ import {
   Plus,
   Zap
 } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
 import "./global.css";
 import { MOCK_INGREDIENTS, MOCK_RECIPES } from './src/services/mockData';
 import { Recipe, Ingredient, IngredientCategory } from './src/types/recipe';
@@ -40,6 +41,9 @@ import { AddRecipeModal } from './src/components/AddRecipeModal';
 import { RecipeDetailModal } from './src/components/RecipeDetailModal';
 import { RecipeStorage } from './src/services/storage';
 import { IngredientBrowser } from './src/components/IngredientBrowser';
+import { IngredientTag } from './src/components/IngredientTag';
+import { springLayout, easeLayout } from './src/utils/animations';
+import { triggerSuccess, triggerImpact } from './src/services/haptics';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 60) / 2;
@@ -95,10 +99,17 @@ const RecipeCard = React.memo(({ recipe, onPress }: { recipe: Recipe; onPress: (
         </Text>
         <View className="flex-row items-center flex-wrap">
           {recipe.ingredients.slice(0, 2).map((ing) => (
-            <View key={ing.id} className="bg-gray-50 px-2 py-0.5 rounded-md mr-1.5 mb-1">
-              <Text className="text-gray-500 text-[9px] font-medium">#{ing.name}</Text>
-            </View>
+            <IngredientTag 
+              key={ing.id} 
+              name={ing.name} 
+              amount={ing.amount}
+              variant="ghost" 
+              className="px-2 py-0.5 mr-1 mb-1 shadow-none border-transparent bg-gray-50"
+            />
           ))}
+          {recipe.ingredients.length > 2 && (
+            <Text className="text-gray-300 text-[9px] font-bold ml-0.5">...</Text>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -157,16 +168,18 @@ const IngredientFilter = React.memo(({
   // 当点击“全部”时，切换展开/收起状态
   const handleToggleBrowser = useCallback(() => {
     // 使用 LayoutAnimation 实现 iOS 风格的平滑展开
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    easeLayout();
     onSelect(null);
     setIsBrowserOpen(prev => !prev);
+    triggerImpact();
   }, [onSelect]);
 
   const handleBrowserToggleIng = useCallback((ing: Ingredient) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    easeLayout();
     onSelect(ing.name);
     // 选中特定标签后自动收起
     setIsBrowserOpen(false);
+    triggerImpact();
   }, [onSelect]);
 
   return (
@@ -176,8 +189,9 @@ const IngredientFilter = React.memo(({
         {selected && (
           <TouchableOpacity 
             onPress={() => {
-              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              easeLayout();
               onSelect(null);
+              triggerImpact();
             }}
             className="bg-gray-100 px-3 py-1.5 rounded-full"
           >
@@ -192,43 +206,21 @@ const IngredientFilter = React.memo(({
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 4 }}
         className="mb-2"
       >
-        <TouchableOpacity 
+        <IngredientTag
+          name={!selected && isBrowserOpen ? '收起全部' : '全部原料'}
+          isSelected={!selected}
+          className="mr-2 h-[48px] justify-center"
           onPress={handleToggleBrowser}
-          activeOpacity={0.8}
-          style={{ 
-            backgroundColor: !selected ? '#FF6B6B' : 'white',
-            shadowColor: !selected ? '#FF6B6B' : '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: !selected ? 0.3 : 0.05,
-            shadowRadius: 8,
-            elevation: 3
-          }}
-          className={`mr-4 px-6 py-3.5 rounded-[22px] border ${!selected ? 'border-[#FF6B6B]' : 'border-gray-100'}`}
-        >
-          <Text style={{ color: !selected ? 'white' : '#4B5563', fontWeight: '700' }} className="text-sm">
-            {!selected && isBrowserOpen ? '收起全部' : '全部原料'}
-          </Text>
-        </TouchableOpacity>
+        />
         
-        {ingredients.slice(0, 8).map((ing) => (
-          <TouchableOpacity 
+        {ingredients.slice(0, 10).map((ing) => (
+          <IngredientTag
             key={ing.id}
+            name={ing.name}
+            isSelected={selected === ing.name}
+            className="mr-2 h-[48px] justify-center"
             onPress={() => handleBrowserToggleIng(ing)}
-            activeOpacity={0.8}
-            style={{ 
-              backgroundColor: selected === ing.name ? '#FF6B6B' : 'white',
-              shadowColor: selected === ing.name ? '#FF6B6B' : '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: selected === ing.name ? 0.3 : 0.05,
-              shadowRadius: 8,
-              elevation: 2
-            }}
-            className={`mr-3 px-5 py-3.5 rounded-[22px] border ${selected === ing.name ? 'border-[#FF6B6B]' : 'border-gray-50'}`}
-          >
-            <Text style={{ color: selected === ing.name ? 'white' : '#6B7280', fontWeight: selected === ing.name ? '700' : '600' }} className="text-sm">
-              {ing.name}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
       </ScrollView>
 
@@ -330,8 +322,15 @@ function MainScreen() {
   const handleCloseDetailModal = useCallback(() => setSelectedRecipe(null), []);
 
   const handleToggleFavorite = useCallback(async (recipe: Recipe) => {
-    const updatedRecipe = { ...recipe, isFavorite: !recipe.isFavorite };
+    const isNowFavorite = !recipe.isFavorite;
+    const updatedRecipe = { ...recipe, isFavorite: isNowFavorite };
     const updatedRecipes = await RecipeStorage.updateRecipe(updatedRecipe);
+    
+    // 触发动画和触感
+    springLayout();
+    if (isNowFavorite) triggerSuccess();
+    else triggerImpact();
+    
     setRecipes(updatedRecipes);
     // 同时更新当前选中的食谱状态
     setSelectedRecipe(updatedRecipe);
@@ -512,19 +511,27 @@ function MainScreen() {
           <View className="flex-row items-center">
             {/* AI 提示按钮：半透明、带有动态感的胶囊 */}
             <TouchableOpacity 
-              onPress={() => alert("✨ AI 实验室：上传图片后，系统将自动为您提取食材并生成烹饪步骤！")}
+              onPress={() => {
+                triggerImpact();
+                alert("✨ AI 实验室：上传图片后，系统将自动为您提取食材并生成烹饪步骤！");
+              }}
               activeOpacity={0.8}
-              className="bg-white/80 backdrop-blur-xl px-5 py-3 rounded-2xl mr-4 shadow-xl border border-white flex-row items-center"
+              className="mr-4 shadow-xl border border-white/20 rounded-2xl overflow-hidden"
             >
-              <Zap size={18} color="#FF6B6B" fill="#FF6B6B" />
-              <Text className="ml-2 text-gray-800 font-bold text-xs">AI 自动生成标签/步骤</Text>
+              <BlurView intensity={80} tint="light" className="px-5 py-3 flex-row items-center">
+                <Zap size={18} color="#FF6B6B" fill="#FF6B6B" />
+                <Text className="ml-2 text-gray-800 font-bold text-xs">AI 自动生成标签/步骤</Text>
+              </BlurView>
             </TouchableOpacity>
 
             {/* 主创建按钮：圆形、渐变效果感 */}
             <TouchableOpacity 
               className="w-18 h-18 bg-[#FF6B6B] rounded-full items-center justify-center border-4 border-white shadow-2xl"
               style={{ width: 72, height: 72 }}
-              onPress={handleOpenAddModal}
+              onPress={() => {
+                triggerImpact();
+                handleOpenAddModal();
+              }}
             >
               <Plus size={36} color="white" strokeWidth={3} />
             </TouchableOpacity>

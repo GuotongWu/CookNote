@@ -4,6 +4,7 @@ export interface Ingredient {
   id: string;
   name: string;
   category?: IngredientCategory;
+  amount?: number; // 重量，统一单位为“克(g)”
 }
 
 export interface Recipe {

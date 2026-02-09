@@ -1,12 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ScrollView, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { Search, Hash } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import { Search } from 'lucide-react-native';
 import { Ingredient, IngredientCategory } from '../types/recipe';
-
-// 启用 Android 上的 LayoutAnimation
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+import { IngredientTag } from './IngredientTag';
+import { easeLayout } from '../utils/animations';
 
 interface IngredientBrowserProps {
   allIngredients: Ingredient[];
@@ -56,7 +53,7 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
 
   const handleSearchChange = (text: string) => {
     // 简单的布局动画让搜索结果出现时不跳跃
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    easeLayout();
     setSearch(text);
   };
 
@@ -82,31 +79,14 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
             <Text className="text-gray-400 text-[10px] ml-2 font-medium">{cat.items.length}</Text>
           </View>
           <View className="flex-row flex-wrap">
-            {cat.items.map(ing => {
-              const isSelected = selectedIngredients.includes(ing.name);
-              return (
-                <TouchableOpacity
-                  key={ing.id}
-                  onPress={() => onToggle(ing)}
-                  activeOpacity={0.7}
-                  style={{
-                    backgroundColor: isSelected ? '#FF6B6B' : 'white',
-                    shadowColor: isSelected ? '#FF6B6B' : '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: isSelected ? 0.3 : 0.05,
-                    shadowRadius: 4,
-                    elevation: 2
-                  }}
-                  className={`mr-2.5 mb-2.5 px-4 py-2.5 rounded-2xl flex-row items-center border ${
-                    isSelected ? 'border-[#FF6B6B]' : 'border-gray-50'
-                  }`}
-                >
-                  <Text className={`text-sm tracking-wide ${isSelected ? 'text-white font-bold' : 'text-gray-700 font-medium'}`}>
-                    {ing.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {cat.items.map(ing => (
+              <IngredientTag
+                key={ing.id}
+                name={ing.name}
+                isSelected={selectedIngredients.includes(ing.name)}
+                onPress={() => onToggle(ing)}
+              />
+            ))}
           </View>
         </View>
       ))}
