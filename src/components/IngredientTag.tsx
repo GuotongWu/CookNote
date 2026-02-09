@@ -6,6 +6,7 @@ import { triggerImpact } from '../services/haptics';
 interface IngredientTagProps {
   name: string;
   amount?: number;
+  cost?: number;
   isSelected?: boolean;
   onPress?: () => void;
   onRemove?: () => void;
@@ -16,6 +17,7 @@ interface IngredientTagProps {
 export const IngredientTag: React.FC<IngredientTagProps> = ({ 
   name, 
   amount,
+  cost,
   isSelected, 
   onPress, 
   onRemove, 
@@ -73,6 +75,11 @@ export const IngredientTag: React.FC<IngredientTagProps> = ({
         {amount !== undefined && amount !== null && (
           <Text className={`text-[10px] font-normal opacity-80 ${isSelected ? 'text-white' : 'text-gray-400'}`}>
             {' '}{amount}克
+          </Text>
+        )}
+        {cost !== undefined && cost > 0 && (
+          <Text className={`text-[10px] font-normal opacity-80 ${isSelected ? 'text-white' : 'text-[#FF6B6B]'}`}>
+            {' '}￥{cost.toFixed(2)}
           </Text>
         )}
       </Text>

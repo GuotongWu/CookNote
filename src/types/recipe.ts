@@ -5,6 +5,7 @@ export interface Ingredient {
   name: string;
   category?: IngredientCategory;
   amount?: number; // 重量，统一单位为“克(g)”
+  cost?: number; // 成本，单位为“元”
 }
 
 export interface Recipe {
@@ -15,6 +16,7 @@ export interface Recipe {
   steps?: string[];
   createdAt: number;
   isFavorite?: boolean; // 新增收藏状态
+  cost?: number; // 总成本
 }
 
 /**

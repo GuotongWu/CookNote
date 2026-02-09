@@ -92,6 +92,12 @@ const RecipeCard = React.memo(({ recipe, onPress }: { recipe: Recipe; onPress: (
             <Heart size={14} color="#FF6B6B" fill="#FF6B6B" />
           </View>
         )}
+        {/* 成本标识 */}
+        {recipe.cost !== undefined && recipe.cost > 0 && (
+          <View className="absolute bottom-3 right-3 bg-black/40 backdrop-blur-md rounded-xl px-2 py-1">
+            <Text className="text-white text-[10px] font-bold">￥{recipe.cost.toFixed(2)}</Text>
+          </View>
+        )}
       </View>
       <View className="p-3.5">
         <Text className="text-gray-900 font-bold text-base mb-1.5" numberOfLines={1}>

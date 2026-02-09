@@ -49,10 +49,22 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [selectedIngredients, setSelectedIngredients] = useState<Ingredient[]>([]);
   const [newIngredientName, setNewIngredientName] = useState('');
   const [newIngredientAmount, setNewIngredientAmount] = useState(''); // 新增：自定义原料重量
+  const [newIngredientCost, setNewIngredientCost] = useState(''); // 新增：自定义原料成本
   const [newIngredientCategory, setNewIngredientCategory] = useState<IngredientCategory>('肉禽类');
   const [steps, setSteps] = useState<string[]>([]);
   const [currentStep, setCurrentStep] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
+  const [manualCost, setManualCost] = useState<string>(''); // 手动输入的总成本
+  const [isManualCost, setIsManualCost] = useState(false); // 是否处于手动模式
+  const [ingredientCostInputs, setIngredientCostInputs] = useState<Record<string, string>>({}); // 记录各原料成本的原始输入字符串
+
+  // 计算标签成本总和
+  const totalIngredientsCost = React.useMemo(() => {
+    return selectedIngredients.reduce((sum, ing) => sum + (ing.cost || 0), 0);
+  }, [selectedIngredients]);
+
+  // 最终显示的成本（如果手动修改过则用手动的，否则用自动计算的）
+  const displayTotalCost = isManualCost ? manualCost : totalIngredientsCost.toFixed(2);
 
   // 监听 initialRecipe 的变化，填充表单（编辑模式）
   React.useEffect(() => {
@@ -65,11 +77,30 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
           ...ing,
           amount: typeof ing.amount === 'string' 
             ? parseInt((ing.amount as string).replace(/[^0-9]/g, ''), 10) || undefined
-            : ing.amount
+            : ing.amount,
+          cost: ing.cost || 0
         }));
         setSelectedIngredients(sanitizedIngredients);
+        
+        // 初始化成本输入字符串映射
+        const costMap: Record<string, string> = {};
+        sanitizedIngredients.forEach(ing => {
+          if (ing.cost !== undefined && ing.cost > 0) {
+            costMap[ing.id] = ing.cost.toString();
+          }
+        });
+        setIngredientCostInputs(costMap);
+
         setSteps(initialRecipe.steps || []);
         setIsFavorite(!!initialRecipe.isFavorite);
+        if (initialRecipe.cost !== undefined) {
+          setManualCost(initialRecipe.cost.toString());
+          // 如果初始成本和标签之和不等，标记为手动
+          const totalTags = sanitizedIngredients.reduce((sum, ing) => sum + (ing.cost || 0), 0);
+          if (Math.abs(initialRecipe.cost - totalTags) > 0.01) {
+            setIsManualCost(true);
+          }
+        }
       } else {
         // 如果没有 initialRecipe，确保是干净的表单（新增模式）
         resetForm();
@@ -126,6 +157,12 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setSelectedIngredients(prev => {
       const exists = prev.find(i => i.id === ing.id);
       if (exists) {
+        // 移除时同时清理输入状态
+        setIngredientCostInputs(inputs => {
+          const next = { ...inputs };
+          delete next[ing.id];
+          return next;
+        });
         return prev.filter(i => i.id !== ing.id);
       }
       return [...prev, ing];
@@ -140,6 +177,18 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     ));
   }, []);
 
+  const updateIngredientCost = React.useCallback((id: string, text: string) => {
+    // 允许数字和小数点
+    const numericValue = text.replace(/[^0-9.]/g, '');
+    
+    // 更新原始输入字符串状态，防止小数点被吞
+    setIngredientCostInputs(prev => ({ ...prev, [id]: numericValue }));
+    
+    setSelectedIngredients(prev => prev.map(ing => 
+      ing.id === id ? { ...ing, cost: numericValue ? parseFloat(numericValue) : 0 } : ing
+    ));
+  }, []);
+
   const handleAddNewIngredient = React.useCallback(() => {
     const trimmedName = newIngredientName.trim();
     if (!trimmedName) return;
@@ -147,24 +196,33 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     // 统一检查逻辑
     const existsInMock = MOCK_INGREDIENTS.find(i => i.name === trimmedName);
     
+    const costValue = newIngredientCost ? parseFloat(newIngredientCost.replace(/[^0-9.]/g, '')) : 0;
+    
     setSelectedIngredients(prev => {
       if (prev.some(i => i.name === trimmedName)) return prev;
       
       const amount = newIngredientAmount ? parseInt(newIngredientAmount.replace(/[^0-9]/g, ''), 10) : undefined;
       
-      const newIng: Ingredient = existsInMock ? { ...existsInMock, amount } : {
+      const newIng: Ingredient = existsInMock ? { ...existsInMock, amount, cost: costValue } : {
         id: `custom-${Date.now()}`,
         name: trimmedName,
         category: newIngredientCategory,
-        amount
+        amount,
+        cost: costValue
       };
+      
+      // 如果有成本，记录到原始字符状态
+      if (costValue > 0) {
+        setIngredientCostInputs(inputs => ({ ...inputs, [newIng.id]: newIngredientCost }));
+      }
       
       return [...prev, newIng];
     });
 
     setNewIngredientName('');
     setNewIngredientAmount('');
-  }, [newIngredientName, newIngredientCategory, newIngredientAmount]);
+    setNewIngredientCost('');
+  }, [newIngredientName, newIngredientCategory, newIngredientAmount, newIngredientCost]);
 
   const addStep = React.useCallback(() => {
     if (currentStep.trim()) {
@@ -200,12 +258,13 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       steps: steps.length > 0 ? steps : undefined,
       createdAt: initialRecipe ? initialRecipe.createdAt : Date.now(),
       isFavorite,
+      cost: parseFloat(displayTotalCost) || 0
     };
     onSave(newRecipe);
     onClose();
     // 延迟重置，避免弹窗关闭动画中内容消失
     setTimeout(resetForm, 400);
-  }, [name, imageUris, selectedIngredients, steps, onSave, onClose, initialRecipe]);
+  }, [name, imageUris, selectedIngredients, steps, onSave, onClose, initialRecipe, displayTotalCost, isFavorite]);
 
   const resetForm = React.useCallback(() => {
     setName('');
@@ -213,10 +272,14 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setSelectedIngredients([]);
     setNewIngredientName('');
     setNewIngredientAmount('');
+    setNewIngredientCost('');
     setNewIngredientCategory('肉禽类');
     setSteps([]);
     setCurrentStep('');
     setIsFavorite(false);
+    setManualCost('');
+    setIsManualCost(false);
+    setIngredientCostInputs({});
   }, []);
 
   return (
@@ -348,6 +411,8 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                     >
                       <View className="w-2 h-2 rounded-full bg-[#FF6B6B] mr-3" />
                       <Text className="flex-1 text-gray-800 font-bold text-sm">{ing.name}</Text>
+                      
+                      {/* 重量输入 */}
                       <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2">
                         <TextInput 
                           placeholder="0"
@@ -359,6 +424,20 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                         />
                         <Text className="text-[10px] text-gray-400 ml-1 font-bold">克</Text>
                       </View>
+
+                      {/* 成本输入 */}
+                      <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2">
+                        <Text className="text-[10px] text-gray-400 mr-1 font-bold">￥</Text>
+                        <TextInput 
+                          placeholder="0"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="decimal-pad"
+                          className="text-xs w-10 text-gray-600 font-bold text-right"
+                          value={ingredientCostInputs[ing.id] ?? (ing.cost && ing.cost > 0 ? ing.cost.toString() : '')}
+                          onChangeText={(text) => updateIngredientCost(ing.id, text)}
+                        />
+                      </View>
+
                       <TouchableOpacity 
                         onPress={() => {
                           easeLayout();
@@ -370,6 +449,43 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                       </TouchableOpacity>
                     </View>
                   ))}
+
+                  {/* 总成本汇总区域 - 响应用户需求的设计 */}
+                  <View className="mt-4 bg-[#FF6B6B]/5 p-4 rounded-3xl border border-[#FF6B6B]/10">
+                    <View className="flex-row justify-between items-center">
+                      <View>
+                        <Text className="text-gray-900 font-bold text-sm">预估总成本</Text>
+                        <Text className="text-gray-400 text-[10px] mt-0.5">
+                          {isManualCost ? '⚠️ 已手动修改' : '✨ 由下方标签自动汇总'}
+                        </Text>
+                      </View>
+                      <View className="flex-row items-center bg-white px-4 py-2 rounded-2xl border border-[#FF6B6B]/20">
+                        <Text className="text-[#FF6B6B] font-bold text-lg mr-1">￥</Text>
+                        <TextInput 
+                          placeholder="0"
+                          placeholderTextColor="#9CA3AF"
+                          keyboardType="decimal-pad"
+                          className="text-[#FF6B6B] font-bold text-xl min-w-[60px] text-right"
+                          value={displayTotalCost}
+                          onChangeText={(text) => {
+                            setManualCost(text.replace(/[^0-9.]/g, ''));
+                            setIsManualCost(true);
+                          }}
+                        />
+                        {isManualCost && (
+                          <TouchableOpacity 
+                            onPress={() => {
+                              easeLayout();
+                              setIsManualCost(false);
+                            }}
+                            className="ml-2 bg-[#FF6B6B]/10 p-1 rounded-full"
+                          >
+                            <Sparkles size={12} color="#FF6B6B" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  </View>
                 </View>
               )}
 
@@ -384,6 +500,8 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                     placeholderTextColor="#9CA3AF"
                   />
                   <View className="w-[1px] h-6 bg-gray-200" />
+                  
+                  {/* 重量 */}
                   <TextInput 
                     placeholder="0"
                     keyboardType="number-pad"
@@ -393,10 +511,24 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                     placeholderTextColor="#9CA3AF"
                   />
                   <Text className="text-[10px] text-gray-400 mr-2 font-bold">克</Text>
+                  
+                  <View className="w-[1px] h-6 bg-gray-200" />
+                  
+                  {/* 成本 */}
+                  <Text className="text-[10px] text-gray-400 ml-2 font-bold">￥</Text>
+                  <TextInput 
+                    placeholder="0"
+                    keyboardType="decimal-pad"
+                    className="w-12 px-2 py-3 text-sm text-[#FF6B6B] font-bold text-right"
+                    value={newIngredientCost}
+                    onChangeText={(text) => setNewIngredientCost(text.replace(/[^0-9.]/g, ''))}
+                    placeholderTextColor="#9CA3AF"
+                  />
+
                   <TouchableOpacity 
                     onPress={handleAddNewIngredient}
                     activeOpacity={0.8}
-                    className="w-10 h-10 bg-[#FF6B6B] rounded-[20px] items-center justify-center shadow-sm shadow-[#FF6B6B]/40"
+                    className="w-10 h-10 bg-[#FF6B6B] rounded-[20px] items-center justify-center shadow-sm shadow-[#FF6B6B]/40 ml-2"
                   >
                     <Plus size={18} color="white" />
                   </TouchableOpacity>

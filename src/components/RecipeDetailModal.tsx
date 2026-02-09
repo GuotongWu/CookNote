@@ -133,10 +133,17 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
             </View>
 
             <View className="px-6 py-6" style={{ paddingBottom: insets.bottom + 40 }}>
-              {/* 记录时间卡片 */}
-              <View className="flex-row items-center mb-6 bg-gray-50 p-4 rounded-2xl">
-                <Clock size={20} color="#6B7280" />
-                <Text className="text-gray-500 ml-2">记录于 {new Date(recipe.createdAt).toLocaleDateString()}</Text>
+              {/* 记录时间 & 成本卡片 */}
+              <View className="flex-row items-center mb-6 space-x-3">
+                <View className="flex-1 flex-row items-center bg-gray-50 p-4 rounded-2xl">
+                  <Clock size={18} color="#6B7280" />
+                  <Text className="text-gray-500 ml-2 text-xs">记录于 {new Date(recipe.createdAt).toLocaleDateString()}</Text>
+                </View>
+                {recipe.cost !== undefined && recipe.cost > 0 && (
+                  <View className="flex-row items-center bg-[#FF6B6B]/10 p-4 rounded-2xl">
+                    <Text className="text-[#FF6B6B] font-bold text-xs">￥{recipe.cost.toFixed(2)}</Text>
+                  </View>
+                )}
               </View>
 
               {/* 原料列表 */}
@@ -147,6 +154,7 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
                     key={ing.id} 
                     name={ing.name} 
                     amount={ing.amount}
+                    cost={ing.cost}
                     variant="primary"
                     className="bg-[#FF6B6B]/10 border-transparent"
                   />

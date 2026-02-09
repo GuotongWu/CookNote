@@ -7,7 +7,10 @@
 
 **CookNote** 是一款基于 Expo 和 React Native 开发的现代化个人菜谱管理应用。它旨在帮助每一位美食爱好者轻松记录、分类和回顾自己的烹饪心得，并预留了强大的 AI 扩展能力。
 
-![App Preview](https://via.placeholder.com/800x400?text=CookNote+Preview)
+<p align="center">
+  <img src="./assets/frontpage.jpg" width="300" />
+  <img src="./assets/selectpage.jpg" width="300" />
+</p>
 
 ## ✨ 核心特性
 
