@@ -13,7 +13,7 @@ import {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock, ChevronLeft, Trash2, Edit3, Heart } from 'lucide-react-native';
-import { Recipe } from '../types/recipe';
+import { Recipe, FamilyMember } from '../types/recipe';
 import { IngredientTag } from './IngredientTag';
 import { triggerImpact, triggerSuccess } from '../services/haptics';
 
@@ -24,6 +24,7 @@ interface RecipeDetailModalProps {
   onDelete?: (id: string) => void;
   onEdit?: (recipe: Recipe) => void; 
   onToggleFavorite?: (recipe: Recipe) => void; // 新增：切换收藏回调
+  members?: FamilyMember[]; // 新增：从外部传入成员列表
 }
 
 export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({ 
@@ -32,12 +33,15 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
   onClose, 
   onDelete,
   onEdit,
-  onToggleFavorite
+  onToggleFavorite,
+  members = []
 }) => {
   const insets = useSafeAreaInsets();
   const [activeImageIndex, setActiveImageIndex] = React.useState(0);
 
   if (!isVisible || !recipe) return null;
+
+  const likedMembers = members.filter(m => recipe.likedBy?.includes(m.id)) ?? [];
 
   const handleScroll = (event: any) => {
     const slide = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
@@ -145,6 +149,24 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
                   </View>
                 )}
               </View>
+
+              {/* 喜欢的成员标注 */}
+              {likedMembers.length > 0 && (
+                <View className="mb-8">
+                  <Text className="text-xl font-bold text-gray-900 mb-4">谁最喜欢这道菜？</Text>
+                  <View className="flex-row flex-wrap">
+                    {likedMembers.map(member => (
+                      <View
+                        key={member.id}
+                        style={{ backgroundColor: member.color }}
+                        className="mr-3 mb-3 px-5 py-2.5 rounded-full"
+                      >
+                        <Text className="text-white text-sm font-bold">{member.name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
 
               {/* 原料列表 */}
               <Text className="text-xl font-bold text-gray-900 mb-4">主要原料</Text>

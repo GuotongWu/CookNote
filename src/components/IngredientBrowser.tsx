@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ScrollView } from 'react-native';
-import { Search } from 'lucide-react-native';
+import { Search, Hash } from 'lucide-react-native';
 import { Ingredient, IngredientCategory } from '../types/recipe';
 import { IngredientTag } from './IngredientTag';
 import { easeLayout } from '../utils/animations';

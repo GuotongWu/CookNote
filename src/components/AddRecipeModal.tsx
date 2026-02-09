@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Camera, Image as ImageIcon, Plus, Trash2, Sparkles, Check, Heart } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Recipe, Ingredient, AISkillProvider, IngredientCategory } from '../types/recipe';
+import { Recipe, Ingredient, AISkillProvider, IngredientCategory, FamilyMember } from '../types/recipe';
 import { MOCK_INGREDIENTS } from '../services/mockData';
 import { IngredientBrowser } from './IngredientBrowser';
 import { IngredientTag } from './IngredientTag';
@@ -32,6 +32,7 @@ interface AddRecipeModalProps {
   initialRecipe?: Recipe | null; // 新增：用于编辑模式
   availableIngredients?: Ingredient[]; // 允许外部传入动态标签列表
   aiProvider?: AISkillProvider; // 预留 AI 能力接口
+  members?: FamilyMember[]; // 新增：从外部传入成员列表以保持同步
 }
 
 export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({ 
@@ -40,7 +41,8 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   onSave, 
   initialRecipe,
   availableIngredients = MOCK_INGREDIENTS, 
-  aiProvider 
+  aiProvider,
+  members = [] 
 }) => {
   const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
@@ -54,6 +56,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [steps, setSteps] = useState<string[]>([]);
   const [currentStep, setCurrentStep] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
+  const [likedBy, setLikedBy] = useState<string[]>([]);
   const [manualCost, setManualCost] = useState<string>(''); // 手动输入的总成本
   const [isManualCost, setIsManualCost] = useState(false); // 是否处于手动模式
   const [ingredientCostInputs, setIngredientCostInputs] = useState<Record<string, string>>({}); // 记录各原料成本的原始输入字符串
@@ -93,6 +96,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 
         setSteps(initialRecipe.steps || []);
         setIsFavorite(!!initialRecipe.isFavorite);
+        setLikedBy(initialRecipe.likedBy || []);
         if (initialRecipe.cost !== undefined) {
           setManualCost(initialRecipe.cost.toString());
           // 如果初始成本和标签之和不等，标记为手动
@@ -169,23 +173,12 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     });
   }, []);
 
-  const updateIngredientAmount = React.useCallback((id: string, text: string) => {
-    // 仅保留数字
-    const numericValue = text.replace(/[^0-9]/g, '');
+  const updateIngredient = React.useCallback((id: string, updates: Partial<Ingredient>, rawCost?: string) => {
+    if (rawCost !== undefined) {
+      setIngredientCostInputs(prev => ({ ...prev, [id]: rawCost }));
+    }
     setSelectedIngredients(prev => prev.map(ing => 
-      ing.id === id ? { ...ing, amount: numericValue ? parseInt(numericValue, 10) : undefined } : ing
-    ));
-  }, []);
-
-  const updateIngredientCost = React.useCallback((id: string, text: string) => {
-    // 允许数字和小数点
-    const numericValue = text.replace(/[^0-9.]/g, '');
-    
-    // 更新原始输入字符串状态，防止小数点被吞
-    setIngredientCostInputs(prev => ({ ...prev, [id]: numericValue }));
-    
-    setSelectedIngredients(prev => prev.map(ing => 
-      ing.id === id ? { ...ing, cost: numericValue ? parseFloat(numericValue) : 0 } : ing
+      ing.id === id ? { ...ing, ...updates } : ing
     ));
   }, []);
 
@@ -195,13 +188,11 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     
     // 统一检查逻辑
     const existsInMock = MOCK_INGREDIENTS.find(i => i.name === trimmedName);
-    
-    const costValue = newIngredientCost ? parseFloat(newIngredientCost.replace(/[^0-9.]/g, '')) : 0;
+    const costValue = parseFloat(newIngredientCost) || 0;
+    const amount = parseInt(newIngredientAmount, 10) || undefined;
     
     setSelectedIngredients(prev => {
       if (prev.some(i => i.name === trimmedName)) return prev;
-      
-      const amount = newIngredientAmount ? parseInt(newIngredientAmount.replace(/[^0-9]/g, ''), 10) : undefined;
       
       const newIng: Ingredient = existsInMock ? { ...existsInMock, amount, cost: costValue } : {
         id: `custom-${Date.now()}`,
@@ -211,8 +202,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         cost: costValue
       };
       
-      // 如果有成本，记录到原始字符状态
-      if (costValue > 0) {
+      if (newIngredientCost) {
         setIngredientCostInputs(inputs => ({ ...inputs, [newIng.id]: newIngredientCost }));
       }
       
@@ -233,6 +223,16 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 
   const removeStep = React.useCallback((index: number) => {
     setSteps(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const toggleLikedBy = React.useCallback((memberId: string) => {
+    setLikedBy(prev => {
+      if (prev.includes(memberId)) {
+        return prev.filter(id => id !== memberId);
+      }
+      return [...prev, memberId];
+    });
+    triggerImpact();
   }, []);
 
   const handleAISteps = React.useCallback(async () => {
@@ -258,6 +258,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       steps: steps.length > 0 ? steps : undefined,
       createdAt: initialRecipe ? initialRecipe.createdAt : Date.now(),
       isFavorite,
+      likedBy,
       cost: parseFloat(displayTotalCost) || 0
     };
     onSave(newRecipe);
@@ -277,6 +278,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setSteps([]);
     setCurrentStep('');
     setIsFavorite(false);
+    setLikedBy([]);
     setManualCost('');
     setIsManualCost(false);
     setIngredientCostInputs({});
@@ -337,7 +339,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                 </TouchableOpacity>
 
                 {imageUris.map((uri, index) => (
-                  <View key={index} className="w-40 h-52 mr-4 rounded-3xl overflow-hidden bg-gray-100 shadow-sm">
+                  <View key={index} className="w-40 h-52 mr-4 rounded-3xl overflow-hidden bg-gray-100 shadow-soft">
                     <Image source={{ uri }} className="w-full h-full" resizeMode="cover" />
                     <TouchableOpacity 
                       onPress={() => removeImage(index)}
@@ -388,6 +390,35 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
               </TouchableOpacity>
             </View>
 
+            {/* 家庭成员喜欢标注 - iOS 风格药丸标签 */}
+            <View className="mb-8">
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-xl font-bold text-gray-900 tracking-tight">谁最喜欢这道菜？</Text>
+                <Text className="text-gray-400 text-xs font-medium">{likedBy.length} 人喜欢</Text>
+              </View>
+              <View className="flex-row flex-wrap">
+                {members.map(member => (
+                  <TouchableOpacity
+                    key={member.id}
+                    onPress={() => toggleLikedBy(member.id)}
+                    activeOpacity={0.7}
+                    style={{
+                      backgroundColor: likedBy.includes(member.id) ? member.color : '#F3F4F6',
+                      borderColor: likedBy.includes(member.id) ? member.color : '#E5E7EB',
+                    }}
+                    className="mr-3 mb-3 px-5 py-2.5 rounded-full border"
+                  >
+                    <Text 
+                      style={{ color: likedBy.includes(member.id) ? 'white' : '#4B5563' }}
+                      className="text-sm font-bold"
+                    >
+                      {member.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             {/* 主要原料选择 */}
             <View className="mb-8">
               <View className="flex-row justify-between items-center mb-4">
@@ -420,7 +451,10 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                           keyboardType="number-pad"
                           className="text-xs w-10 text-gray-600 font-bold text-right"
                           value={ing.amount?.toString() || ''}
-                          onChangeText={(text) => updateIngredientAmount(ing.id, text)}
+                          onChangeText={(text) => {
+                            const val = text.replace(/[^0-9]/g, '');
+                            updateIngredient(ing.id, { amount: val ? parseInt(val, 10) : undefined });
+                          }}
                         />
                         <Text className="text-[10px] text-gray-400 ml-1 font-bold">克</Text>
                       </View>
@@ -434,7 +468,10 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                           keyboardType="decimal-pad"
                           className="text-xs w-10 text-gray-600 font-bold text-right"
                           value={ingredientCostInputs[ing.id] ?? (ing.cost && ing.cost > 0 ? ing.cost.toString() : '')}
-                          onChangeText={(text) => updateIngredientCost(ing.id, text)}
+                          onChangeText={(text) => {
+                            const val = text.replace(/[^0-9.]/g, '');
+                            updateIngredient(ing.id, { cost: parseFloat(val) || 0 }, val);
+                          }}
                         />
                       </View>
 

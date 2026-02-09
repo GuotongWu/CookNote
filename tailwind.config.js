@@ -11,6 +11,11 @@ module.exports = {
         accent: "#FFE66D",
         background: "#F8F9FA",
       },
+      boxShadow: {
+        'soft': '0 4px 20px rgba(0, 0, 0, 0.05)',
+        'card': '0 10px 30px rgba(0, 0, 0, 0.08)',
+        'button': '0 8px 15px rgba(255, 107, 107, 0.3)',
+      }
     },
   },
   plugins: [],

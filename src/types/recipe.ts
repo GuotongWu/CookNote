@@ -17,6 +17,14 @@ export interface Recipe {
   createdAt: number;
   isFavorite?: boolean; // 新增收藏状态
   cost?: number; // 总成本
+  likedBy?: string[]; // 喜欢的家庭成员 ID 列表
+}
+
+export interface FamilyMember {
+  id: string;
+  name: string;
+  avatar?: string; // 如果没有头像，可以根据姓名生成占位
+  color?: string; // 成员专属颜色
 }
 
 /**
