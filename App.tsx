@@ -18,7 +18,8 @@ import {
   FlatList,
   LayoutAnimation,
   UIManager,
-  ActionSheetIOS
+  ActionSheetIOS,
+  Alert
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -35,6 +36,7 @@ import {
   Zap
 } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
+import * as ImagePicker from 'expo-image-picker';
 import "./global.css";
 import { MOCK_INGREDIENTS, MOCK_RECIPES } from './src/services/mockData';
 import { Recipe, Ingredient, IngredientCategory, FamilyMember } from './src/types/recipe';
@@ -48,6 +50,7 @@ import { springLayout, easeLayout } from './src/utils/animations';
 import { triggerSuccess, triggerImpact, triggerSelection } from './src/services/haptics';
 import { useRecipes } from './src/hooks/useRecipes';
 import { useFamily } from './src/hooks/useFamily';
+import { AIService } from './src/services/aiService';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 60) / 2;
@@ -199,14 +202,17 @@ const SearchBar = React.memo(({ value, onChange }: { value: string, onChange: (t
       className="flex-1 ml-3 text-base text-gray-800"
       value={value}
       onChangeText={onChange}
+      returnKeyType="search"
     />
+    {value.length > 0 && (
+      <TouchableOpacity onPress={() => onChange('')}>
+        <View className="w-5 h-5 bg-gray-300 rounded-full items-center justify-center">
+          <Text className="text-white text-[10px] font-bold">✕</Text>
+        </View>
+      </TouchableOpacity>
+    )}
   </View>
 ));
-
-// 启用 Android 上的 LayoutAnimation
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 // 提取原料过滤器
 const IngredientFilter = React.memo(({ 
@@ -393,14 +399,66 @@ function MainScreen() {
     toggleFavorite
   } = useRecipes();
 
-  const { members, addMember, deleteMember } = useFamily();
+  const { members, addMember, deleteMember, updateMember } = useFamily();
 
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [isAIProcessing, setIsAIProcessing] = useState(false);
   const [isAddMemberModalVisible, setIsAddMemberModalVisible] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
 
   const insets = useSafeAreaInsets();
+
+  const handleAIUpload = useCallback(async () => {
+    // 1. 选择图片
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: false, // 关闭裁剪窗口
+      allowsMultipleSelection: true, // 支持多张图片上传
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (result.canceled) return;
+
+    // 2. 显示加载动画
+    setIsAIProcessing(true);
+    triggerImpact();
+
+    try {
+      // 3. 调用 AI 分析 (提取所有图片的 base64)
+      const base64Images = result.assets
+        .map(asset => asset.base64)
+        .filter((b): b is string => !!b);
+      
+      const aiData = await AIService.analyzeRecipeImage(base64Images);
+      
+      // 4. 将 AI 结果带入“新建菜肴周期”
+      const initialRecipe: Recipe = {
+        id: `ai-${Date.now()}`,
+        name: aiData.name || '',
+        imageUris: result.assets.map(asset => asset.uri),
+        ingredients: aiData.ingredients || [],
+        steps: aiData.steps || [],
+        createdAt: Date.now(),
+        isFavorite: false,
+        likedBy: []
+      };
+
+      setEditingRecipe(initialRecipe);
+      setIsAddModalVisible(true);
+      triggerSuccess();
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "由于由于网络波动或服务器繁忙，识别未能完成。";
+      Alert.alert(
+        "AI 识读失败",
+        errorMessage,
+        [{ text: "我知道了", style: "cancel" }]
+      );
+    } finally {
+      setIsAIProcessing(false);
+    }
+  }, []);
 
   const handleSelectIngredient = useCallback((ingName: string | null) => {
     setSelectedIngredient(ingName);
@@ -575,19 +633,36 @@ function MainScreen() {
         isVisible={isAddMemberModalVisible}
         onClose={() => setIsAddMemberModalVisible(false)}
         onAdd={addMember}
+        onUpdate={updateMember}
         members={members}
         onDelete={deleteMember}
       />
+
+      {/* AI 处理指示器 - 优雅的 iOS 风格全屏遮罩 */}
+      <Modal 
+        visible={isAIProcessing} 
+        transparent 
+        animationType="fade"
+      >
+        <View className="flex-1 bg-black/40 items-center justify-center">
+          <BlurView intensity={20} className="w-64 p-8 rounded-[40px] bg-white/90 items-center shadow-2xl">
+            <View className="w-20 h-20 bg-[#FF6B6B]/10 rounded-full items-center justify-center mb-6">
+              <ActivityIndicator size="large" color="#FF6B6B" />
+            </View>
+            <Text className="text-xl font-bold text-gray-900 mb-2">AI 智能识读中</Text>
+            <Text className="text-gray-500 text-center text-sm leading-5">
+              正在提取食材标签与烹饪步骤{"\n"}请稍候...
+            </Text>
+          </BlurView>
+        </View>
+      </Modal>
 
       <View className="absolute bottom-10 left-0 right-0 items-center px-6">
         <SafeAreaView edges={['bottom']}>
           <View className="flex-row items-center">
             {/* AI 提示按钮：半透明、带有动态感的胶囊 */}
             <TouchableOpacity 
-              onPress={() => {
-                triggerImpact();
-                alert("✨ AI 实验室：上传图片后，系统将自动为您提取食材并生成烹饪步骤！");
-              }}
+              onPress={handleAIUpload}
               activeOpacity={0.8}
               className="mr-4 shadow-xl border border-white/20 rounded-2xl overflow-hidden"
             >

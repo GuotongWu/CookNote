@@ -5,25 +5,23 @@ import {
   Modal, 
   TouchableOpacity, 
   TextInput, 
-  Image, 
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
   InteractionManager,
   LayoutAnimation
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Camera, Image as ImageIcon, Plus, Trash2, Sparkles, Check, Heart } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Recipe, Ingredient, AISkillProvider, IngredientCategory, FamilyMember } from '../types/recipe';
+import { Recipe, Ingredient, AISkillProvider, FamilyMember } from '../types/recipe';
 import { MOCK_INGREDIENTS } from '../services/mockData';
-import { IngredientBrowser } from './IngredientBrowser';
-import { IngredientTag } from './IngredientTag';
+import { RecipeImagePicker } from './recipe/RecipeImagePicker';
+import { RecipeIngredientEditor } from './recipe/RecipeIngredientEditor';
+import { RecipeStepEditor } from './recipe/RecipeStepEditor';
+import { RecipeMemberSelector } from './recipe/RecipeMemberSelector';
 import { easeLayout, springLayout } from '../utils/animations';
 import { triggerSuccess, triggerImpact } from '../services/haptics';
-
-const CATEGORIES: IngredientCategory[] = ['肉禽类', '蔬菜类', '调料类', '海鲜类', '主食类', '其他'];
 
 interface AddRecipeModalProps {
   isVisible: boolean;
@@ -51,12 +49,15 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [isPickingImage, setIsPickingImage] = useState(false);
   const [selectedIngredients, setSelectedIngredients] = useState<Ingredient[]>([]);
-  const [newIngredientName, setNewIngredientName] = useState('');
-  const [newIngredientAmount, setNewIngredientAmount] = useState(''); // 新增：自定义原料重量
-  const [newIngredientCost, setNewIngredientCost] = useState(''); // 新增：自定义原料成本
-  const [newIngredientCategory, setNewIngredientCategory] = useState<IngredientCategory>('肉禽类');
+  // 新增：动态管理所有可选原料列表，使新添加的标签能出现在浏览器中
+  const [dynamicAvailableIngredients, setDynamicAvailableIngredients] = useState<Ingredient[]>(availableIngredients);
+
+  // 同步外部传入的原料列表
+  React.useEffect(() => {
+    setDynamicAvailableIngredients(availableIngredients);
+  }, [availableIngredients]);
+
   const [steps, setSteps] = useState<string[]>([]);
-  const [currentStep, setCurrentStep] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
   const [likedBy, setLikedBy] = useState<string[]>([]);
   const [manualCost, setManualCost] = useState<string>(''); // 手动输入的总成本
@@ -142,7 +143,6 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         if (!result.canceled) {
           const newUris = result.assets.map(asset => asset.uri);
           setImageUris(prev => [...prev, ...newUris]);
-          easeLayout();
         }
       } catch (error) {
         console.error('Pick image error:', error);
@@ -155,6 +155,16 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const removeImage = React.useCallback((index: number) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setImageUris(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const setAsCover = React.useCallback((index: number) => {
+    if (index === 0) return;
+    triggerImpact();
+    setImageUris(prev => {
+      const next = [...prev];
+      const [selected] = next.splice(index, 1);
+      return [selected, ...next];
+    });
   }, []);
 
   const toggleIngredient = React.useCallback((ing: Ingredient) => {
@@ -181,45 +191,6 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       ing.id === id ? { ...ing, ...updates } : ing
     ));
   }, []);
-
-  const handleAddNewIngredient = React.useCallback(() => {
-    const trimmedName = newIngredientName.trim();
-    if (!trimmedName) return;
-    
-    // 统一检查逻辑
-    const existsInMock = MOCK_INGREDIENTS.find(i => i.name === trimmedName);
-    const costValue = parseFloat(newIngredientCost) || 0;
-    const amount = parseInt(newIngredientAmount, 10) || undefined;
-    
-    setSelectedIngredients(prev => {
-      if (prev.some(i => i.name === trimmedName)) return prev;
-      
-      const newIng: Ingredient = existsInMock ? { ...existsInMock, amount, cost: costValue } : {
-        id: `custom-${Date.now()}`,
-        name: trimmedName,
-        category: newIngredientCategory,
-        amount,
-        cost: costValue
-      };
-      
-      if (newIngredientCost) {
-        setIngredientCostInputs(inputs => ({ ...inputs, [newIng.id]: newIngredientCost }));
-      }
-      
-      return [...prev, newIng];
-    });
-
-    setNewIngredientName('');
-    setNewIngredientAmount('');
-    setNewIngredientCost('');
-  }, [newIngredientName, newIngredientCategory, newIngredientAmount, newIngredientCost]);
-
-  const addStep = React.useCallback(() => {
-    if (currentStep.trim()) {
-      setSteps(prev => [...prev, currentStep.trim()]);
-      setCurrentStep('');
-    }
-  }, [currentStep]);
 
   const removeStep = React.useCallback((index: number) => {
     setSteps(prev => prev.filter((_, i) => i !== index));
@@ -271,17 +242,13 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setName('');
     setImageUris([]);
     setSelectedIngredients([]);
-    setNewIngredientName('');
-    setNewIngredientAmount('');
-    setNewIngredientCost('');
-    setNewIngredientCategory('肉禽类');
+    setDynamicAvailableIngredients(availableIngredients);
     setSteps([]);
-    setCurrentStep('');
     setIsFavorite(false);
     setLikedBy([]);
     setManualCost('');
     setIngredientCostInputs({});
-  }, []);
+  }, [availableIngredients]);
 
   return (
     <Modal 
@@ -306,353 +273,101 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
             showsVerticalScrollIndicator={false} 
             className="flex-1 px-6 pt-4"
             contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+            keyboardShouldPersistTaps="handled"
           >
-            {/* 图片选择区域 - 多图滑动预览 */}
+            {/* 1. 图片选择区域 */}
+            <RecipeImagePicker
+              imageUris={imageUris}
+              isPickingImage={isPickingImage}
+              onPickImage={pickImage}
+              onRemoveImage={removeImage}
+              onSetAsCover={setAsCover}
+            />
+
+            {/* 2. 菜谱名称输入 */}
             <View className="mb-8">
-              <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-xl font-bold text-gray-900 tracking-tight">菜谱照片</Text>
-                <Text className="text-gray-400 text-xs font-medium">{imageUris.length} 张已选</Text>
-              </View>
-              
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                className="flex-row"
-              >
-                {/* 添加按钮 */}
-                <TouchableOpacity 
-                  onPress={() => !isPickingImage && pickImage(false)}
-                  disabled={isPickingImage}
-                  className="w-40 h-52 bg-gray-50 rounded-3xl border border-dashed border-gray-200 justify-center items-center mr-4"
-                >
-                  {isPickingImage ? (
-                    <ActivityIndicator color="#FF6B6B" />
-                  ) : (
-                    <>
-                      <View className="bg-white p-3 rounded-full shadow-sm mb-2">
-                        <Plus size={24} color="#FF6B6B" />
-                      </View>
-                      <Text className="text-gray-400 text-xs font-bold">从相册添加</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                {imageUris.map((uri, index) => (
-                  <View key={index} className="w-40 h-52 mr-4 rounded-3xl overflow-hidden bg-gray-100 shadow-soft">
-                    <Image source={{ uri }} className="w-full h-full" resizeMode="cover" />
-                    <TouchableOpacity 
-                      onPress={() => removeImage(index)}
-                      className="absolute top-2 right-2 bg-black/40 p-1.5 rounded-full"
-                    >
-                      <X size={12} color="white" />
-                    </TouchableOpacity>
-                    {index === 0 && (
-                      <View className="absolute bottom-2 left-2 bg-[#FF6B6B] px-2 py-1 rounded-lg">
-                        <Text className="text-[10px] text-white font-bold">封面</Text>
-                      </View>
-                    )}
-                  </View>
-                ))}
-
-                {/* 拍照按钮 */}
-                <TouchableOpacity 
-                  onPress={() => !isPickingImage && pickImage(true)}
-                  disabled={isPickingImage}
-                  className="w-40 h-52 bg-gray-50 rounded-3xl border border-dashed border-gray-200 justify-center items-center mr-4"
-                >
-                   <Camera size={28} color="#9CA3AF" />
-                   <Text className="text-gray-400 text-[10px] mt-2 font-bold">拍照添加</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </View>
-
-            {/* 菜谱名称输入 */}
-            <View className="mb-6 flex-row items-end">
-              <View className="flex-1 min-w-0 mr-4">
-                <Text className="text-gray-900 font-bold text-lg mb-2">菜谱名称</Text>
-                <TextInput 
-                  placeholder="给你的美味起个名字..."
-                  className="bg-gray-100 px-5 py-4 rounded-2xl text-base"
-                  value={name}
-                  onChangeText={setName}
-                  // @ts-ignore - web only
-                  style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-                />
-              </View>
-              <TouchableOpacity 
-                onPress={() => {
-                  springLayout();
-                  setIsFavorite(!isFavorite);
-                  triggerImpact();
-                }}
-                className={`w-14 h-14 rounded-2xl items-center justify-center shrink-0 ${isFavorite ? 'bg-red-50' : 'bg-gray-100'}`}
-              >
-                <Heart size={24} color={isFavorite ? '#FF6B6B' : '#9CA3AF'} fill={isFavorite ? '#FF6B6B' : 'transparent'} />
-              </TouchableOpacity>
-            </View>
-
-            {/* 家庭成员喜欢标注 - iOS 风格药丸标签 */}
-            <View className="mb-8">
-              <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-xl font-bold text-gray-900 tracking-tight">谁最喜欢这道菜？</Text>
-                <Text className="text-gray-400 text-xs font-medium">{likedBy.length} 人喜欢</Text>
-              </View>
-              <View className="flex-row flex-wrap">
-                {members.map(member => (
-                  <TouchableOpacity
-                    key={member.id}
-                    onPress={() => toggleLikedBy(member.id)}
-                    activeOpacity={0.7}
-                    style={{
-                      backgroundColor: likedBy.includes(member.id) ? member.color : '#F3F4F6',
-                      borderColor: likedBy.includes(member.id) ? member.color : '#E5E7EB',
-                    }}
-                    className="mr-3 mb-3 px-5 py-2.5 rounded-full border"
-                  >
-                    <Text 
-                      style={{ color: likedBy.includes(member.id) ? 'white' : '#4B5563' }}
-                      className="text-sm font-bold"
-                    >
-                      {member.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* 主要原料选择 */}
-            <View className="mb-8">
-              <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-xl font-bold text-gray-900 tracking-tight">选择主要原料</Text>
-                <Text className="text-gray-400 text-xs font-medium">{selectedIngredients.length} 已选</Text>
-              </View>
-              
-              <IngredientBrowser 
-                allIngredients={availableIngredients}
-                selectedIngredients={selectedIngredients.map(i => i.name)}
-                onToggle={toggleIngredient}
-                frequencies={ingredientFrequencies}
+              <Text className="text-xl font-bold text-gray-900 mb-4 tracking-tight">给它取个名字</Text>
+              <TextInput
+                placeholder="例如：米其林三星三文鱼..."
+                className="bg-gray-50 px-5 py-4 rounded-2xl text-lg font-bold text-gray-800 border border-gray-100"
+                value={name}
+                onChangeText={setName}
               />
+            </View>
 
-              {/* 已选标签展示 - 优化为带用量的列表 */}
-              {selectedIngredients.length > 0 && (
-                <View className="mt-5 space-y-2">
-                  {selectedIngredients.map((ing) => (
-                    <View 
-                      key={ing.id} 
-                      className="flex-row items-center bg-gray-50 p-3 rounded-2xl border border-gray-100/50"
-                    >
-                      <View className="w-2 h-2 rounded-full bg-[#FF6B6B] mr-3 shrink-0" />
-                      <Text className="flex-1 min-w-0 text-gray-800 font-bold text-sm" numberOfLines={1}>{ing.name}</Text>
-                      
-                      {/* 重量输入 */}
-                      <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2 shrink-0">
-                        <TextInput 
-                          placeholder="0"
-                          placeholderTextColor="#9CA3AF"
-                          keyboardType="number-pad"
-                          className="text-xs w-10 text-gray-600 font-bold text-right"
-                          value={ing.amount?.toString() || ''}
-                          onChangeText={(text) => {
-                            const val = text.replace(/[^0-9]/g, '');
-                            updateIngredient(ing.id, { amount: val ? parseInt(val, 10) : undefined });
-                          }}
-                          // @ts-ignore - web only
-                          style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-                        />
-                        <Text className="text-[10px] text-gray-400 ml-1 font-bold">克</Text>
-                      </View>
+            {/* 3. 家庭成员与收藏 */}
+            <RecipeMemberSelector
+              members={members}
+              likedBy={likedBy}
+              isFavorite={isFavorite}
+              onToggleLikedBy={toggleLikedBy}
+              onToggleFavorite={() => {
+                setIsFavorite(!isFavorite);
+                triggerImpact();
+              }}
+            />
 
-                      {/* 成本输入 */}
-                      <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2 shrink-0">
-                        <Text className="text-[10px] text-gray-400 mr-1 font-bold">￥</Text>
-                        <TextInput 
-                          placeholder="0"
-                          placeholderTextColor="#9CA3AF"
-                          keyboardType="decimal-pad"
-                          className="text-xs w-10 text-gray-600 font-bold text-right"
-                          value={ingredientCostInputs[ing.id] ?? (ing.cost && ing.cost > 0 ? ing.cost.toString() : '')}
-                          onChangeText={(text) => {
-                            const val = text.replace(/[^0-9.]/g, '');
-                            updateIngredient(ing.id, { cost: parseFloat(val) || 0 }, val);
-                          }}
-                          // @ts-ignore - web only
-                          style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-                        />
-                      </View>
-
-                      <TouchableOpacity 
-                        onPress={() => {
-                          easeLayout();
-                          toggleIngredient(ing);
-                        }}
-                        className="bg-gray-200/50 p-1.5 rounded-full"
-                      >
-                        <X size={14} color="#6B7280" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-
-                  {/* 总成本汇总区域 - 响应用户需求的设计 */}
-                  <View className="mt-4 bg-[#FF6B6B]/5 p-4 rounded-3xl border border-[#FF6B6B]/10">
-                    <View className="flex-row justify-between items-center">
-                      <View>
-                        <Text className="text-gray-900 font-bold text-sm">预估总成本</Text>
-                        <Text className="text-gray-400 text-[10px] mt-0.5">
-                          {manualCost !== '' ? '⚠️ 已手动修改' : '✨ 由下方标签自动汇总'}
-                        </Text>
-                      </View>
-                      <View className="flex-row items-center bg-white px-4 py-2 rounded-2xl border border-[#FF6B6B]/20 shrink-0">
-                        <Text className="text-[#FF6B6B] font-bold text-lg mr-1">￥</Text>
-                        <TextInput 
-                          placeholder="0"
-                          placeholderTextColor="#9CA3AF"
-                          keyboardType="decimal-pad"
-                          className="text-[#FF6B6B] font-bold text-xl min-w-[60px] text-right"
-                          value={displayTotalCost}
-                          onChangeText={(text) => {
-                            setManualCost(text.replace(/[^0-9.]/g, ''));
-                          }}
-                          // @ts-ignore - web only
-                          style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-                        />
-                        {manualCost !== '' && (
-                          <TouchableOpacity 
-                            onPress={() => {
-                              easeLayout();
-                              setManualCost('');
-                            }}
-                            className="ml-2 bg-[#FF6B6B]/10 p-1 rounded-full"
-                          >
-                            <Sparkles size={12} color="#FF6B6B" />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* 自定义原料输入 - 更加轻量美观且支持类别选择 */}
-              <View className="mt-4 bg-gray-50 rounded-[28px] p-2 border border-gray-100">
-                <View className="flex-row items-center">
-                  <TextInput 
-                    placeholder="输入标签(如:羊肉)"
-                    className="flex-1 min-w-0 px-4 py-3 text-sm text-gray-800"
-                    value={newIngredientName}
-                    onChangeText={setNewIngredientName}
-                    placeholderTextColor="#9CA3AF"
-                    // @ts-ignore - web only
-                    style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-                  />
-                  <View className="w-[1px] h-6 bg-gray-200 shrink-0" />
-                  
-                  {/* 重量 */}
-                  <View className="flex-row items-center shrink-0">
-                    <TextInput 
-                      placeholder="0"
-                      keyboardType="number-pad"
-                      className="w-10 px-1 py-3 text-sm text-[#FF6B6B] font-bold text-right"
-                      value={newIngredientAmount}
-                      onChangeText={(text) => setNewIngredientAmount(text.replace(/[^0-9]/g, ''))}
-                      placeholderTextColor="#9CA3AF"
-                      // @ts-ignore - web only
-                      style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-                    />
-                    <Text className="text-[10px] text-gray-400 mr-2 font-bold shrink-0">克</Text>
-                  </View>
-                  
-                  <View className="w-[1px] h-6 bg-gray-200 shrink-0" />
-                  
-                  {/* 成本 */}
-                  <View className="flex-row items-center shrink-0">
-                    <Text className="text-[10px] text-gray-400 ml-2 font-bold shrink-0">￥</Text>
-                    <TextInput 
-                      placeholder="0"
-                      keyboardType="decimal-pad"
-                      className="w-10 px-1 py-3 text-sm text-[#FF6B6B] font-bold text-right"
-                      value={newIngredientCost}
-                      onChangeText={(text) => setNewIngredientCost(text.replace(/[^0-9.]/g, ''))}
-                      placeholderTextColor="#9CA3AF"
-                      // @ts-ignore - web only
-                      style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-                    />
-                  </View>
-
-                  <TouchableOpacity 
-                    onPress={handleAddNewIngredient}
-                    activeOpacity={0.8}
-                    className="w-10 h-10 bg-[#FF6B6B] rounded-full items-center justify-center shadow-sm shadow-[#FF6B6B]/40 ml-2 shrink-0"
-                  >
-                    <Plus size={18} color="white" />
-                  </TouchableOpacity>
-                </View>
+            {/* 4. 原料编辑区域 */}
+            <RecipeIngredientEditor
+              selectedIngredients={selectedIngredients}
+              availableIngredients={dynamicAvailableIngredients}
+              ingredientFrequencies={ingredientFrequencies}
+              onToggleIngredient={toggleIngredient}
+              onUpdateIngredient={updateIngredient}
+              onAddCustomIngredient={(name, category) => {
+                const existsInMock = dynamicAvailableIngredients.find(i => i.name === name);
                 
-                {newIngredientName.trim().length > 0 && (
-                  <View className="flex-row flex-wrap mt-2 px-2 pb-1">
-                    <Text className="text-[10px] text-gray-400 font-bold mb-2 w-full ml-1">选择所属分类：</Text>
-                    {CATEGORIES.map(cat => (
-                      <IngredientTag
-                        key={cat}
-                        name={cat}
-                        isSelected={newIngredientCategory === cat}
-                        variant="outline"
-                        onPress={() => {
-                          easeLayout();
-                          setNewIngredientCategory(cat);
-                        }}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
-            </View>
+                // 如果是全新的原料，加入到动态列表中
+                if (!existsInMock) {
+                  const newIng: Ingredient = {
+                    id: `custom-${Date.now()}`,
+                    name,
+                    category,
+                    amount: 0,
+                    cost: 0
+                  };
+                  setDynamicAvailableIngredients(prev => [newIng, ...prev]);
+                }
+              }}
+            />
 
-            {/* 烹饪步骤 (可选输入 & AI 预留) */}
-            <View className="mb-8">
-              <View className="flex-row justify-between items-center mb-3">
-                <Text className="text-gray-900 font-bold text-lg">烹饪步骤</Text>
-                <TouchableOpacity 
-                  onPress={handleAISteps}
-                  className="flex-row items-center bg-[#FF6B6B]/10 px-3 py-1.5 rounded-full"
-                >
-                  <Sparkles size={16} color="#FF6B6B" />
-                  <Text className="text-[#FF6B6B] font-bold ml-1 text-xs">AI 生成</Text>
-                </TouchableOpacity>
-              </View>
-
-              {steps.map((step, index) => (
-                <View key={index} className="flex-row items-start mb-3 bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                  <View className="w-6 h-6 rounded-full bg-[#FF6B6B]/20 items-center justify-center mr-3 mt-0.5">
-                    <Text className="text-[#FF6B6B] font-bold text-xs">{index + 1}</Text>
-                  </View>
-                  <Text className="flex-1 text-gray-700">{step}</Text>
-                  <TouchableOpacity onPress={() => removeStep(index)} className="ml-2">
-                    <Trash2 size={18} color="#9CA3AF" />
-                  </TouchableOpacity>
+            {/* 5. 成本预算区域 */}
+            <View className="mb-8 p-6 bg-gray-50 rounded-3xl border border-gray-100/50">
+              <View className="flex-row justify-between items-center mb-4">
+                <View className="flex-row items-center">
+                  <View className="w-1 h-3 bg-primary rounded-full mr-2" />
+                  <Text className="text-gray-500 text-sm font-bold">成本预算</Text>
                 </View>
-              ))}
-
-              <View className="flex-row items-center mt-2">
-                <TextInput 
-                  placeholder="添加一步烹饪步骤..."
-                  className="flex-1 min-w-0 bg-gray-100 px-5 py-3 rounded-2xl text-base"
-                  value={currentStep}
-                  onChangeText={setCurrentStep}
-                  onSubmitEditing={addStep}
-                  // @ts-ignore - web only
-                  style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-                />
-                <TouchableOpacity 
-                  onPress={addStep}
-                  className="ml-3 w-12 h-12 bg-[#FF6B6B]/10 rounded-2xl items-center justify-center shrink-0"
-                >
-                  <Plus size={24} color="#FF6B6B" />
-                </TouchableOpacity>
+                <View className="bg-white/80 px-2 py-0.5 rounded-lg border border-gray-100">
+                  <Text className="text-gray-400 text-[10px] font-bold uppercase">自动计算</Text>
+                </View>
               </View>
+              <View className="flex-row items-baseline">
+                <Text className="text-gray-400 text-xl font-medium mr-1.5">¥</Text>
+                <TextInput
+                  placeholder={displayTotalCost}
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numeric"
+                  className="text-gray-900 text-4xl font-bold flex-1 p-0"
+                  style={{ includeFontPadding: false }}
+                  value={manualCost}
+                  onChangeText={setManualCost}
+                />
+              </View>
+              <Text className="text-gray-400 text-[10px] mt-3 font-medium">
+                * 由原料估值累加，您也可以手动修改总成本
+              </Text>
             </View>
 
-            {/* 保存按钮 */}
+            {/* 6. 烹饪步骤区域 */}
+            <RecipeStepEditor
+              steps={steps}
+              onAddStep={(step) => setSteps(prev => [...prev, step])}
+              onRemoveStep={removeStep}
+              onAISteps={handleAISteps}
+            />
+
+            {/* 7. 保存按钮 */}
             <TouchableOpacity 
               onPress={handleSave}
               className="bg-[#FF6B6B] py-5 rounded-3xl items-center shadow-lg"

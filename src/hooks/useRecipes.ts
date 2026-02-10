@@ -39,12 +39,33 @@ export const useRecipes = () => {
     const seenNames = new Set<string>();
     const baseList = [...MOCK_INGREDIENTS, ...recipes.flatMap(r => r.ingredients || [])];
     
-    return baseList.filter(ing => {
+    const uniqueList = baseList.filter(ing => {
       if (seenNames.has(ing.name)) return false;
       seenNames.add(ing.name);
       return true;
     });
-  }, [recipes]);
+
+    const categoryPriority: Record<string, number> = {
+      '肉禽类': 1,
+      '海鲜类': 2,
+      '蔬菜类': 3,
+      '主食类': 4,
+      '其他': 5,
+      '调料类': 6
+    };
+
+    // 优先按分类(肉禽 > 海鲜 > 蔬菜 > ...)排序，同分类内按频率排序
+    return uniqueList.sort((a, b) => {
+      const pA = categoryPriority[a.category || '其他'] || 99;
+      const pB = categoryPriority[b.category || '其他'] || 99;
+      
+      if (pA !== pB) return pA - pB;
+      
+      const freqA = ingredientFrequencies[a.name] || 0;
+      const freqB = ingredientFrequencies[b.name] || 0;
+      return freqB - freqA;
+    });
+  }, [recipes, ingredientFrequencies]);
 
   const filteredRecipes = useMemo(() => {
     const query = searchQuery.toLowerCase();

@@ -31,7 +31,10 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+.env.test
+.env.production
 
 # typescript
 *.tsbuildinfo
@@ -40,3 +43,6 @@ yarn-error.*
 /ios
 /android
 .vercel
+
+# Local test images
+test_images/

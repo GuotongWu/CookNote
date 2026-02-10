@@ -8,10 +8,12 @@ import { triggerImpact } from '../services/haptics';
 
 interface IngredientBrowserProps {
   allIngredients: Ingredient[];
-  selectedIngredients: string[];
+  selectedIngredients: Ingredient[];
   onToggle: (ing: Ingredient) => void;
   singleSelect?: boolean;
   frequencies?: Record<string, number>;
+  searchQuery?: string;
+  hideSearch?: boolean;
 }
 
 const CATEGORIES: IngredientCategory[] = ['肉禽类', '蔬菜类', '调料类', '海鲜类', '主食类', '其他'];
@@ -21,9 +23,12 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
   selectedIngredients, 
   onToggle,
   singleSelect = false,
-  frequencies = {}
+  frequencies = {},
+  searchQuery = '',
+  hideSearch = false
 }) => {
-  const [search, setSearch] = useState('');
+  const [internalSearch, setInternalSearch] = useState('');
+  const search = hideSearch ? searchQuery : internalSearch;
   
   // 模糊匹配 & 排序逻辑
   const filtered = useMemo(() => {
@@ -71,9 +76,7 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
   }, [filtered, frequencies]);
 
   const handleSearchChange = (text: string) => {
-    // 简单的布局动画让搜索结果出现时不跳跃
-    easeLayout();
-    setSearch(text);
+    setInternalSearch(text);
   };
 
   const renderSectionHeader = ({ section: { title, data } }: any) => (
@@ -92,7 +95,7 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
           <IngredientTag
             key={ing.id}
             name={ing.name}
-            isSelected={selectedIngredients.includes(ing.name)}
+            isSelected={selectedIngredients.some(s => s.name === ing.name)}
             onPress={() => {
               triggerImpact();
               onToggle(ing);
@@ -106,25 +109,27 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
   );
 
   return (
-    <View className="bg-white rounded-[32px] p-2 border border-gray-100 overflow-hidden">
+    <View className="flex-1">
       {/* 搜索栏保持固定 */}
-      <View className="px-3 pt-3 pb-2">
-        <View className="flex-row items-center bg-gray-50 rounded-2xl px-4 py-2.5 mb-2 shadow-sm shadow-black/[0.01] border border-gray-100">
-          <View className="shrink-0">
-            <Search size={18} color="#9CA3AF" />
+      {!hideSearch && (
+        <View className="px-3 pt-3 pb-2 bg-white rounded-t-[32px]">
+          <View className="flex-row items-center bg-gray-50 rounded-2xl px-4 py-2.5 mb-2 shadow-sm shadow-black/[0.01] border border-gray-100">
+            <View className="shrink-0">
+              <Search size={18} color="#9CA3AF" />
+            </View>
+            <TextInput 
+              placeholder="快速查找原料..."
+              className="flex-1 min-w-0 ml-2 text-base text-gray-800"
+              value={internalSearch}
+              onChangeText={handleSearchChange}
+              placeholderTextColor="#9CA3AF"
+              clearButtonMode="while-editing"
+              // @ts-ignore - web only
+              style={Platform.OS === 'web' ? { outline: 'none' } : {}}
+            />
           </View>
-          <TextInput 
-            placeholder="快速查找原料..."
-            className="flex-1 min-w-0 ml-2 text-base text-gray-800"
-            value={search}
-            onChangeText={handleSearchChange}
-            placeholderTextColor="#9CA3AF"
-            clearButtonMode="while-editing"
-            // @ts-ignore - web only
-            style={Platform.OS === 'web' ? { outline: 'none' } : {}}
-          />
         </View>
-      </View>
+      )}
       
       <View className="px-3 pb-4">
         {sections.map((section, index) => (

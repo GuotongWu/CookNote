@@ -41,11 +41,21 @@ export const useFamily = () => {
     }
   };
 
+  const updateMember = async (member: FamilyMember) => {
+    try {
+      const updated = await FamilyStorage.updateMember(member);
+      setMembers(updated);
+    } catch (error) {
+      console.error('Failed to update family member:', error);
+    }
+  };
+
   return {
     members,
     isLoading,
     addMember,
     deleteMember,
+    updateMember,
     refreshMembers: loadMembers,
   };
 };

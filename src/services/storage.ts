@@ -45,6 +45,13 @@ export const FamilyStorage = {
     const newMembers = members.filter(m => m.id !== id);
     await this.saveMembers(newMembers);
     return newMembers;
+  },
+
+  async updateMember(member: FamilyMember): Promise<FamilyMember[]> {
+    const members = await this.getMembers();
+    const newMembers = members.map(m => m.id === member.id ? member : m);
+    await this.saveMembers(newMembers);
+    return newMembers;
   }
 };
 

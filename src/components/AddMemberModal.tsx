@@ -9,7 +9,7 @@ import {
   Platform,
   ScrollView
 } from 'react-native';
-import { X, Check, Trash2, Plus } from 'lucide-react-native';
+import { X, Check, Trash2, Plus, Edit3 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { triggerSuccess, triggerImpact } from '../services/haptics';
 import { easeLayout } from '../utils/animations';
@@ -19,6 +19,7 @@ interface AddMemberModalProps {
   isVisible: boolean;
   onClose: () => void;
   onAdd: (name: string, color: string) => void;
+  onUpdate: (member: FamilyMember) => void;
   members: FamilyMember[];
   onDelete: (id: string) => void;
 }
@@ -32,6 +33,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
   isVisible, 
   onClose, 
   onAdd, 
+  onUpdate,
   members,
   onDelete 
 }) => {
@@ -39,13 +41,37 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
   const [name, setName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const [isAdding, setIsAdding] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
   const handleSave = () => {
     if (!name.trim()) return;
-    onAdd(name.trim(), selectedColor);
+    
+    if (editingMemberId) {
+      onUpdate({
+        id: editingMemberId,
+        name: name.trim(),
+        color: selectedColor
+      });
+    } else {
+      onAdd(name.trim(), selectedColor);
+    }
+    
     triggerSuccess();
+    resetForm();
+  };
+
+  const resetForm = () => {
     setName('');
+    setSelectedColor(PRESET_COLORS[0]);
     setIsAdding(false);
+    setEditingMemberId(null);
+  };
+
+  const startEdit = (member: FamilyMember) => {
+    setName(member.name);
+    setSelectedColor(member.color || PRESET_COLORS[0]);
+    setEditingMemberId(member.id);
+    easeLayout();
   };
 
   const handleDelete = (id: string) => {
@@ -79,7 +105,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
               contentContainerStyle={{ padding: 24 }}
             >
               {/* 现有成员列表 */}
-              {!isAdding && (
+              {!isAdding && !editingMemberId && (
                 <View className="mb-2">
                   <View className="flex-row justify-between items-center mb-4">
                     <Text className="text-gray-400 text-xs font-bold uppercase tracking-wider">当前成员</Text>
@@ -95,28 +121,36 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                     </TouchableOpacity>
                   </View>
                   
-                  {members.map(member => (
+                  {members?.map(member => (
                     <View 
                       key={member.id} 
                       className="flex-row items-center justify-between bg-gray-50 border border-gray-100 p-4 rounded-2xl mb-3"
                     >
-                      <View className="flex-row items-center">
+                      <View className="flex-row items-center flex-1">
                         <View 
                           style={{ backgroundColor: member.color }}
                           className="w-10 h-10 rounded-full items-center justify-center mr-3 shadow-sm"
                         >
                           <Text className="text-white font-bold">{member.name.charAt(0)}</Text>
                         </View>
-                        <Text className="text-gray-800 font-bold text-lg">{member.name}</Text>
+                        <Text className="text-gray-800 font-bold text-lg flex-1" numberOfLines={1}>{member.name}</Text>
                       </View>
                       
-                      {/* 只有非默认成员可以删除（可选，这里允许全部删除但保留界面简洁） */}
-                      <TouchableOpacity 
-                        onPress={() => handleDelete(member.id)}
-                        className="bg-red-50 p-2.5 rounded-xl"
-                      >
-                        <Trash2 size={18} color="#FF6B6B" />
-                      </TouchableOpacity>
+                      <View className="flex-row items-center">
+                        <TouchableOpacity 
+                          onPress={() => startEdit(member)}
+                          className="bg-blue-50 p-2.5 rounded-xl mr-2"
+                        >
+                          <Edit3 size={18} color="#4DABF7" />
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          onPress={() => handleDelete(member.id)}
+                          className="bg-red-50 p-2.5 rounded-xl"
+                        >
+                          <Trash2 size={18} color="#FF6B6B" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   ))}
                   
@@ -128,15 +162,17 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                 </View>
               )}
 
-              {/* 添加表单 */}
-              {isAdding && (
+              {/* 添加/编辑表单 */}
+              {(isAdding || editingMemberId) && (
                 <View>
                   <View className="flex-row justify-between items-center mb-4">
-                    <Text className="text-gray-400 text-xs font-bold uppercase tracking-wider">新增成员</Text>
+                    <Text className="text-gray-400 text-xs font-bold uppercase tracking-wider">
+                      {editingMemberId ? '编辑成员' : '新增成员'}
+                    </Text>
                     <TouchableOpacity 
                       onPress={() => {
                         easeLayout();
-                        setIsAdding(false);
+                        resetForm();
                       }}
                       className="px-3 py-1.5"
                     >
@@ -178,7 +214,9 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({
                     disabled={!name.trim()}
                     className={`py-4 rounded-2xl items-center shadow-md ${!name.trim() ? 'bg-gray-200' : 'bg-gray-900'}`}
                   >
-                    <Text className="text-white font-bold text-lg">确认添加</Text>
+                    <Text className="text-white font-bold text-lg">
+                      {editingMemberId ? '保存修改' : '确认添加'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
