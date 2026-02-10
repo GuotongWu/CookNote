@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ScrollView, SectionList, Platform } from 'react-native';
 import { Search, Hash, TrendingUp } from 'lucide-react-native';
-import { Ingredient, IngredientCategory } from '../types/recipe';
+import { Ingredient, IngredientCategory, INGREDIENT_CATEGORIES } from '../types/recipe';
 import { IngredientTag } from './IngredientTag';
 import { easeLayout } from '../utils/animations';
 import { triggerImpact } from '../services/haptics';
@@ -15,8 +15,6 @@ interface IngredientBrowserProps {
   searchQuery?: string;
   hideSearch?: boolean;
 }
-
-const CATEGORIES: IngredientCategory[] = ['肉禽类', '蔬菜类', '调料类', '海鲜类', '主食类', '其他'];
 
 export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({ 
   allIngredients, 
@@ -64,7 +62,7 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
       map[cat].push(ing);
     });
     
-    return CATEGORIES.filter(cat => map[cat]).map(cat => ({
+    return INGREDIENT_CATEGORIES.filter(cat => map[cat]).map(cat => ({
       title: cat,
       // 在分类内部按频率排序
       data: [map[cat].sort((a, b) => {

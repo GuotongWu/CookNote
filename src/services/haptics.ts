@@ -27,3 +27,12 @@ export const triggerSelection = () => {
     Haptics.selectionAsync();
   }
 };
+
+/**
+ * 触发错误通知反馈（适合删除、失败）
+ */
+export const triggerError = () => {
+  if (Platform.OS !== 'web') {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  }
+};

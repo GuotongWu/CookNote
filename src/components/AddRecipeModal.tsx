@@ -22,6 +22,7 @@ import { RecipeStepEditor } from './recipe/RecipeStepEditor';
 import { RecipeMemberSelector } from './recipe/RecipeMemberSelector';
 import { easeLayout, springLayout } from '../utils/animations';
 import { triggerSuccess, triggerImpact } from '../services/haptics';
+import { calculateIngredientsCost } from '../utils/recipe';
 
 interface AddRecipeModalProps {
   isVisible: boolean;
@@ -65,7 +66,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 
   // 计算标签成本总和
   const autoCost = React.useMemo(() => {
-    return selectedIngredients.reduce((sum, ing) => sum + (ing.cost || 0), 0);
+    return calculateIngredientsCost(selectedIngredients);
   }, [selectedIngredients]);
 
   // 最终显示的成本（优先使用手动，否则自动）
@@ -101,7 +102,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         setLikedBy(initialRecipe.likedBy || []);
         
         if (initialRecipe.cost !== undefined) {
-          const totalTags = sanitizedIngredients.reduce((sum, ing) => sum + (ing.cost || 0), 0);
+          const totalTags = calculateIngredientsCost(sanitizedIngredients);
           // 只有当手动成本与自动计算不一致时，才设置手动成本
           if (Math.abs(initialRecipe.cost - totalTags) > 0.01 || initialRecipe.cost === 0) {
             setManualCost(initialRecipe.cost.toString());

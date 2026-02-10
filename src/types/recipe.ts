@@ -1,5 +1,16 @@
 export type IngredientCategory = '肉禽类' | '蔬菜类' | '调料类' | '海鲜类' | '主食类' | '其他';
 
+export const INGREDIENT_CATEGORIES: IngredientCategory[] = ['肉禽类', '蔬菜类', '调料类', '海鲜类', '主食类', '其他'];
+
+export const CATEGORY_PRIORITY: Record<string, number> = {
+  '肉禽类': 1,
+  '海鲜类': 2,
+  '蔬菜类': 3,
+  '主食类': 4,
+  '其他': 5,
+  '调料类': 6
+};
+
 export interface Ingredient {
   id: string;
   name: string;

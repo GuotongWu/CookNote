@@ -11,12 +11,10 @@ import {
   Platform
 } from 'react-native';
 import { Plus, Check, X, BadgePlus, Search } from 'lucide-react-native';
-import { Ingredient, IngredientCategory } from '../../types/recipe';
+import { Ingredient, IngredientCategory, INGREDIENT_CATEGORIES } from '../../types/recipe';
 import { IngredientBrowser } from '../IngredientBrowser';
 import { IngredientTag } from '../IngredientTag';
 import { triggerImpact, triggerSuccess } from '../../services/haptics';
-
-const CATEGORIES: IngredientCategory[] = ['肉禽类', '蔬菜类', '调料类', '海鲜类', '主食类', '其他'];
 
 interface RecipeIngredientEditorProps {
   selectedIngredients: Ingredient[];
@@ -241,7 +239,7 @@ export const RecipeIngredientEditor: React.FC<RecipeIngredientEditorProps> = ({
 
           <Text className="text-sm font-bold text-gray-400 mb-4 ml-1">选择分类</Text>
           <View className="flex-row flex-wrap mb-12">
-            {CATEGORIES.map(cat => (
+            {INGREDIENT_CATEGORIES.map(cat => (
               <TouchableOpacity
                 key={cat}
                 onPress={() => setNewCategory(cat)}

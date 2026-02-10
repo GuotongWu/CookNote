@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { Recipe, Ingredient } from '../types/recipe';
+import { Recipe, Ingredient, CATEGORY_PRIORITY } from '../types/recipe';
 import { RecipeStorage } from '../services/storage';
 import { MOCK_INGREDIENTS } from '../services/mockData';
 
@@ -45,19 +45,10 @@ export const useRecipes = () => {
       return true;
     });
 
-    const categoryPriority: Record<string, number> = {
-      '肉禽类': 1,
-      '海鲜类': 2,
-      '蔬菜类': 3,
-      '主食类': 4,
-      '其他': 5,
-      '调料类': 6
-    };
-
     // 优先按分类(肉禽 > 海鲜 > 蔬菜 > ...)排序，同分类内按频率排序
     return uniqueList.sort((a, b) => {
-      const pA = categoryPriority[a.category || '其他'] || 99;
-      const pB = categoryPriority[b.category || '其他'] || 99;
+      const pA = CATEGORY_PRIORITY[a.category || '其他'] || 99;
+      const pB = CATEGORY_PRIORITY[b.category || '其他'] || 99;
       
       if (pA !== pB) return pA - pB;
       

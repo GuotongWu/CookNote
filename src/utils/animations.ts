@@ -1,4 +1,7 @@
-import { LayoutAnimation, Platform, UIManager } from 'react-native';
+import { LayoutAnimation, Platform, UIManager, Dimensions } from 'react-native';
+
+const { width } = Dimensions.get('window');
+export const COLUMN_WIDTH = (width - 60) / 2;
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);

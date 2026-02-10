@@ -8,7 +8,8 @@ import {
   Alert,
   Dimensions,
   Platform,
-  RefreshControl
+  RefreshControl,
+  Image
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -19,9 +20,9 @@ import {
   UtensilsCrossed
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { BlurView } from 'expo-blur';
 
 import { Recipe } from '../../types/recipe';
-import { MOCK_RECIPES } from '../../services/mockData';
 import { AddRecipeModal } from '../AddRecipeModal';
 import { AddMemberModal } from '../AddMemberModal';
 import { RecipeDetailModal } from '../RecipeDetailModal';
@@ -29,14 +30,13 @@ import { RecipeCard } from './RecipeCard';
 import { SearchBar } from './SearchBar';
 import { IngredientFilter } from './IngredientFilter';
 import { FamilyFilter } from './FamilyFilter';
-import { springLayout } from '../../utils/animations';
-import { triggerSuccess, triggerImpact } from '../../services/haptics';
+import { springLayout, easeLayout, COLUMN_WIDTH } from '../../utils/animations';
+import { triggerSuccess, triggerImpact, triggerSelection } from '../../services/haptics';
 import { useRecipes } from '../../hooks/useRecipes';
 import { useFamily } from '../../hooks/useFamily';
 import { AIService } from '../../services/aiService';
 
 const { width } = Dimensions.get('window');
-const COLUMN_WIDTH = (width - 60) / 2;
 
 const MemoizedAddRecipeModal = React.memo(AddRecipeModal);
 const MemoizedRecipeDetailModal = React.memo(RecipeDetailModal);
@@ -237,20 +237,20 @@ export const MainScreen = () => {
         }
         ListHeaderComponent={
           <>
-            <View className="px-6 pt-4 pb-2">
-              <View className="flex-row justify-between items-center mb-6">
+            <View className="px-6 pt-10 pb-4">
+              <View className="flex-row justify-between items-center mb-8">
                 <View>
-                  <Text className="text-gray-400 text-sm font-medium">煮妇/煮夫的秘密库</Text>
-                  <Text className="text-3xl font-bold text-gray-900">CookNote</Text>
+                  <Text className="text-gray-400 text-xs font-black uppercase tracking-widest mb-1">CookNote Studio</Text>
+                  <Text className="text-4xl font-black text-gray-900 tracking-tighter">我的食谱记录</Text>
                 </View>
                 <TouchableOpacity 
                   onPress={() => {
                     triggerImpact();
                     alert("✨ AI 智能推荐功能开发中，敬请期待！");
                   }}
-                  className="w-12 h-12 rounded-2xl bg-[#FF6B6B]/10 items-center justify-center"
+                  className="w-14 h-14 rounded-[22px] bg-gray-50 items-center justify-center border border-gray-100 shadow-sm"
                 >
-                  <Sparkles size={24} color="#FF6B6B" />
+                  <Sparkles size={28} color="#FF6B6B" strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
 
@@ -286,25 +286,31 @@ export const MainScreen = () => {
       />
 
       {/* Floating Action Buttons */}
-      <View className="absolute bottom-10 left-0 right-0 items-center justify-center flex-row px-8">
+      <View className="absolute bottom-12 left-0 right-0 items-center justify-center flex-row px-8">
         <TouchableOpacity 
           onPress={handleAIUpload}
           disabled={isAIProcessing}
-          className="w-14 h-14 bg-gray-900 rounded-full items-center justify-center shadow-lg mr-3"
+          activeOpacity={0.8}
+          className="mr-4 rounded-[24px] overflow-hidden shadow-xl"
         >
-          {isAIProcessing ? (
-            <ActivityIndicator color="white" size="small" />
-          ) : (
-            <Sparkles size={24} color="white" />
-          )}
+          <BlurView intensity={30} tint="dark" className="w-16 h-16 items-center justify-center bg-black/20">
+            {isAIProcessing ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Sparkles size={28} color="white" strokeWidth={2.5} />
+            )}
+          </BlurView>
         </TouchableOpacity>
 
         <TouchableOpacity 
           onPress={handleOpenAddModal}
-          className="flex-1 h-14 bg-[#FF6B6B] rounded-[28px] flex-row items-center justify-center shadow-xl shadow-[#FF6B6B]/40"
+          activeOpacity={0.9}
+          className="flex-1 h-16 rounded-[32px] overflow-hidden shadow-2xl shadow-[#FF6B6B]/40"
         >
-          <Plus size={24} color="white" />
-          <Text className="text-white font-bold text-lg ml-2">记录新菜谱</Text>
+          <View className="flex-1 bg-[#FF6B6B] flex-row items-center justify-center">
+            <Plus size={28} color="white" strokeWidth={3} />
+            <Text className="text-white font-black text-xl ml-2.5 tracking-tight">记录菜谱</Text>
+          </View>
         </TouchableOpacity>
       </View>
 

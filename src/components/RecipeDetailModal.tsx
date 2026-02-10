@@ -9,13 +9,14 @@ import {
   Platform,
   Dimensions 
 } from 'react-native';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { BlurView } from 'expo-blur';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock, ChevronLeft, Trash2, Edit3, Heart } from 'lucide-react-native';
 import { Recipe, FamilyMember } from '../types/recipe';
 import { IngredientTag } from './IngredientTag';
 import { triggerImpact, triggerSuccess } from '../services/haptics';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface RecipeDetailModalProps {
   recipe: Recipe | null;
@@ -23,8 +24,8 @@ interface RecipeDetailModalProps {
   onClose: () => void;
   onDelete?: (id: string) => void;
   onEdit?: (recipe: Recipe) => void; 
-  onToggleFavorite?: (recipe: Recipe) => void; // 新增：切换收藏回调
-  members?: FamilyMember[]; // 新增：从外部传入成员列表
+  onToggleFavorite?: (recipe: Recipe) => void; 
+  members?: FamilyMember[]; 
 }
 
 export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({ 
@@ -58,13 +59,20 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
       onRequestClose={onClose}
     >
       <View style={{ flex: 1, backgroundColor: 'white' }}>
-        <View className="flex-1">
-          {/* Header */}
-          <View className="px-6 py-4 flex-row items-center border-b border-gray-100">
-            <TouchableOpacity onPress={onClose} className="mr-4">
-              <ChevronLeft size={28} color="#111827" />
+        {/* iOS Style Floating Header */}
+        <BlurView 
+          intensity={80} 
+          tint="light" 
+          className="absolute top-0 left-0 right-0 z-10 border-b border-gray-100"
+        >
+          <View className="px-6 py-4 flex-row items-center">
+            <TouchableOpacity 
+              onPress={onClose} 
+              className="mr-4 w-10 h-10 bg-white shadow-sm rounded-full items-center justify-center"
+            >
+              <ChevronLeft size={24} color="#111827" strokeWidth={3} />
             </TouchableOpacity>
-            <Text className="text-xl font-bold flex-1" numberOfLines={1}>{recipe.name}</Text>
+            <Text className="text-xl font-black flex-1 text-gray-900" numberOfLines={1}>{recipe.name}</Text>
             
             <View className="flex-row">
               <TouchableOpacity 
@@ -73,10 +81,10 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
                   if (!recipe.isFavorite) triggerSuccess();
                   else triggerImpact();
                 }}
-                className={`p-2 mr-2 rounded-full ${recipe.isFavorite ? 'bg-red-50' : 'bg-gray-50'}`}
+                className={`p-2 w-10 h-10 mr-2 rounded-full items-center justify-center ${recipe.isFavorite ? 'bg-red-50' : 'bg-gray-50'}`}
               >
                 <Heart 
-                  size={22} 
+                  size={20} 
                   color={recipe.isFavorite ? '#FF6B6B' : '#4B5563'} 
                   fill={recipe.isFavorite ? '#FF6B6B' : 'transparent'} 
                 />
@@ -87,68 +95,58 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
                   triggerImpact();
                   onEdit?.(recipe);
                 }}
-                className="p-2 mr-2 bg-gray-50 rounded-full"
+                className="p-2 w-10 h-10 bg-gray-50 rounded-full items-center justify-center"
               >
-                <Edit3 size={22} color="#4B5563" />
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                onPress={() => {
-                  triggerImpact();
-                  const confirmed = Platform.OS === 'web' 
-                    ? window.confirm('确定要从你的秘密食谱库中移除这个菜谱吗？')
-                    : true; 
-                  if (confirmed) onDelete?.(recipe.id);
-                }}
-                className="p-2 bg-red-50 rounded-full"
-              >
-                <Trash2 size={22} color="#EF4444" />
+                <Edit3 size={20} color="#4B5563" />
               </TouchableOpacity>
             </View>
           </View>
+        </BlurView>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {/* 顶图多图浏览 - 优雅的横向分页 */}
-            <View className="h-96 w-full bg-gray-100">
-              <ScrollView 
-                horizontal 
-                pagingEnabled 
-                showsHorizontalScrollIndicator={false}
-                onScroll={handleScroll}
-                scrollEventThrottle={16}
-              >
-                {(recipe.imageUris || []).map((uri, index) => (
-                  <Image 
-                    key={index}
-                    source={{ uri }} 
-                    style={{ width: SCREEN_WIDTH }}
-                    className="h-full"
-                    resizeMode="cover"
-                  />
-                ))}
-              </ScrollView>
-              
-              {/* 图片指示器（如果是多图） */}
-              {(recipe.imageUris?.length || 0) > 1 && (
-                <View className="absolute bottom-4 right-6 bg-black/50 px-3 py-1.5 rounded-full">
-                  <Text className="text-white text-[10px] font-bold">{activeImageIndex + 1} / {recipe.imageUris?.length}</Text>
+        <ScrollView 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingTop: 0 }}
+        >
+          {/* 顶图多图浏览 */}
+          <View className="h-[460px] w-full bg-gray-100">
+            <ScrollView 
+              horizontal 
+              pagingEnabled 
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+            >
+              {(recipe.imageUris || []).map((uri, index) => (
+                <Image 
+                  key={index}
+                  source={{ uri }} 
+                  style={{ width: SCREEN_WIDTH }}
+                  className="h-full"
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+            
+            {(recipe.imageUris?.length || 0) > 1 && (
+              <View className="absolute bottom-6 right-6 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full">
+                <Text className="text-white text-[10px] font-black">{activeImageIndex + 1} / {recipe.imageUris?.length}</Text>
+              </View>
+            )}
+          </View>
+
+          <View className="px-6 py-8" style={{ paddingBottom: insets.bottom + 100 }}>
+            {/* 核心信息卡片 */}
+            <View className="flex-row items-center mb-8 space-x-3">
+              <View className="flex-1 flex-row items-center bg-gray-50/50 border border-gray-100 p-4 rounded-3xl">
+                <Clock size={16} color="#6B7280" strokeWidth={2.5} />
+                <Text className="text-gray-500 ml-2 text-xs font-bold">{new Date(recipe.createdAt).toLocaleDateString()}</Text>
+              </View>
+              {recipe.cost !== undefined && recipe.cost > 0 && (
+                <View className="bg-[#FF6B6B]/10 px-6 py-4 rounded-3xl border border-[#FF6B6B]/10">
+                  <Text className="text-[#FF6B6B] font-black text-xs">￥{recipe.cost.toFixed(1)}</Text>
                 </View>
               )}
             </View>
-
-            <View className="px-6 py-6" style={{ paddingBottom: insets.bottom + 40 }}>
-              {/* 记录时间 & 成本卡片 */}
-              <View className="flex-row items-center mb-6 space-x-3">
-                <View className="flex-1 flex-row items-center bg-gray-50 p-4 rounded-2xl">
-                  <Clock size={18} color="#6B7280" />
-                  <Text className="text-gray-500 ml-2 text-xs">记录于 {new Date(recipe.createdAt).toLocaleDateString()}</Text>
-                </View>
-                {recipe.cost !== undefined && recipe.cost > 0 && (
-                  <View className="flex-row items-center bg-[#FF6B6B]/10 p-4 rounded-2xl">
-                    <Text className="text-[#FF6B6B] font-bold text-xs">￥{recipe.cost.toFixed(2)}</Text>
-                  </View>
-                )}
-              </View>
 
               {/* 喜欢的成员标注 */}
               {likedMembers.length > 0 && (
@@ -205,7 +203,6 @@ export const RecipeDetailModal: React.FC<RecipeDetailModalProps> = React.memo(({
             </View>
           </ScrollView>
         </View>
-      </View>
     </Modal>
   );
 });
