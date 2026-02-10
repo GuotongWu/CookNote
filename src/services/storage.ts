@@ -15,15 +15,13 @@ export const FamilyStorage = {
   async getMembers(): Promise<FamilyMember[]> {
     try {
       const data = await AsyncStorage.getItem(FAMILY_STORAGE_KEY);
-      if (data) {
-        return JSON.parse(data);
-      }
-      // 首次进入时，不必阻塞 UI 等待保存完成
-      this.saveMembers(DEFAULT_FAMILY);
-      return DEFAULT_FAMILY;
+      if (data) return JSON.parse(data);
+
+      const useMock = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || __DEV__;
+      return useMock ? DEFAULT_FAMILY : [];
     } catch (e) {
       console.error('Failed to load family members', e);
-      return DEFAULT_FAMILY;
+      return [];
     }
   },
 
@@ -40,6 +38,13 @@ export const FamilyStorage = {
     const newMembers = [...members, member];
     await this.saveMembers(newMembers);
     return newMembers;
+  },
+
+  async deleteMember(id: string): Promise<FamilyMember[]> {
+    const members = await this.getMembers();
+    const newMembers = members.filter(m => m.id !== id);
+    await this.saveMembers(newMembers);
+    return newMembers;
   }
 };
 
@@ -50,12 +55,17 @@ export const RecipeStorage = {
       if (data) {
         return JSON.parse(data);
       }
-      // 初次启动使用 Mock 数据，异步保存减少启动耗时
-      this.saveRecipes(MOCK_RECIPES);
-      return MOCK_RECIPES;
+
+      const useMock = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || __DEV__;
+      if (useMock) {
+        this.saveRecipes(MOCK_RECIPES);
+        return MOCK_RECIPES;
+      }
+
+      return [];
     } catch (e) {
       console.error('Failed to load recipes', e);
-      return MOCK_RECIPES;
+      return [];
     }
   },
 

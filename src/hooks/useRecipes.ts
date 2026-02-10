@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Recipe, Ingredient } from '../types/recipe';
 import { RecipeStorage } from '../services/storage';
+import { MOCK_INGREDIENTS } from '../services/mockData';
 
 export const useRecipes = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -24,15 +25,25 @@ export const useRecipes = () => {
     loadRecipes();
   }, [loadRecipes]);
 
+  const ingredientFrequencies = useMemo(() => {
+    const counts: Record<string, number> = {};
+    recipes.forEach(r => {
+      r.ingredients.forEach(ing => {
+        counts[ing.name] = (counts[ing.name] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [recipes]);
+
   const allAvailableIngredients = useMemo(() => {
     const seenNames = new Set<string>();
-    return recipes
-      .flatMap(r => r.ingredients || [])
-      .filter(ing => {
-        if (seenNames.has(ing.name)) return false;
-        seenNames.add(ing.name);
-        return true;
-      });
+    const baseList = [...MOCK_INGREDIENTS, ...recipes.flatMap(r => r.ingredients || [])];
+    
+    return baseList.filter(ing => {
+      if (seenNames.has(ing.name)) return false;
+      seenNames.add(ing.name);
+      return true;
+    });
   }, [recipes]);
 
   const filteredRecipes = useMemo(() => {
@@ -121,6 +132,7 @@ export const useRecipes = () => {
   return { 
     recipes: filteredRecipes, 
     allAvailableIngredients,
+    ingredientFrequencies,
     groupedRecipes,
     isLoading, 
     searchQuery,

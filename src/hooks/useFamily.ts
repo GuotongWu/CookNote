@@ -32,10 +32,20 @@ export const useFamily = () => {
     return newMember;
   };
 
+  const deleteMember = async (id: string) => {
+    try {
+      const updated = await FamilyStorage.deleteMember(id);
+      setMembers(updated);
+    } catch (error) {
+      console.error('Failed to delete family member:', error);
+    }
+  };
+
   return {
     members,
     isLoading,
     addMember,
+    deleteMember,
     refreshMembers: loadMembers,
   };
 };

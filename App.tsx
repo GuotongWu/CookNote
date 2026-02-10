@@ -45,7 +45,7 @@ import { RecipeStorage } from './src/services/storage';
 import { IngredientBrowser } from './src/components/IngredientBrowser';
 import { IngredientTag } from './src/components/IngredientTag';
 import { springLayout, easeLayout } from './src/utils/animations';
-import { triggerSuccess, triggerImpact } from './src/services/haptics';
+import { triggerSuccess, triggerImpact, triggerSelection } from './src/services/haptics';
 import { useRecipes } from './src/hooks/useRecipes';
 import { useFamily } from './src/hooks/useFamily';
 
@@ -146,21 +146,29 @@ const RecipeCard = React.memo(({ recipe, onPress, onDelete, allMembers = [] }: {
         )}
       </View>
       <View className="p-3.5">
-        <Text className="text-gray-900 font-bold text-base mb-1.5" numberOfLines={1}>
+        <Text className="text-gray-900 font-bold text-sm mb-2" numberOfLines={1}>
           {recipe.name}
         </Text>
         <View className="flex-row items-center flex-wrap">
-          {recipe.ingredients.slice(0, 2).map((ing) => (
-            <IngredientTag 
-              key={ing.id} 
-              name={ing.name} 
-              amount={ing.amount}
-              variant="ghost" 
-              className="px-2 py-0.5 mr-1 mb-1 shadow-none border-transparent bg-gray-50"
-            />
-          ))}
-          {recipe.ingredients.length > 2 && (
-            <Text className="text-gray-300 text-[9px] font-bold ml-0.5">...</Text>
+          {[...recipe.ingredients]
+            .sort((a, b) => (b.cost || 0) - (a.cost || 0))
+            .slice(0, 3)
+            .map((ing, idx) => (
+              <View 
+                key={idx} 
+                className="bg-gray-100/50 px-1.5 py-1 rounded-lg flex-row items-center mr-1 mb-1 border border-gray-200/30"
+              >
+                <Hash size={8} color="#9CA3AF" />
+                <Text className="text-gray-500 text-[9px] font-bold ml-0.5" numberOfLines={1}>
+                  {ing.name}
+                </Text>
+              </View>
+            ))
+          }
+          {recipe.ingredients.length > 3 && (
+            <View className="bg-gray-50 px-1.5 py-1 rounded-lg mb-1">
+              <Text className="text-gray-300 text-[9px] font-black">+{recipe.ingredients.length - 3}</Text>
+            </View>
           )}
         </View>
       </View>
@@ -204,11 +212,13 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const IngredientFilter = React.memo(({ 
   ingredients, 
   selected, 
-  onSelect 
+  onSelect,
+  frequencies = {}
 }: { 
   ingredients: Ingredient[], 
   selected: string | null, 
-  onSelect: (name: string | null) => void 
+  onSelect: (name: string | null) => void,
+  frequencies?: Record<string, number>
 }) => {
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
 
@@ -226,7 +236,7 @@ const IngredientFilter = React.memo(({
     onSelect(ing.name);
     // 选中特定标签后自动收起
     setIsBrowserOpen(false);
-    triggerImpact();
+    triggerSelection();
   }, [onSelect]);
 
   return (
@@ -277,6 +287,7 @@ const IngredientFilter = React.memo(({
           <IngredientBrowser 
             allIngredients={ingredients}
             selectedIngredients={[]}
+            frequencies={frequencies}
             onToggle={handleBrowserToggleIng}
             singleSelect
           />
@@ -375,13 +386,14 @@ function MainScreen() {
     selectedMemberId,
     setSelectedMemberId,
     allAvailableIngredients,
+    ingredientFrequencies,
     saveRecipe,
     deleteRecipe,
     resetData,
     toggleFavorite
   } = useRecipes();
 
-  const { members, addMember } = useFamily();
+  const { members, addMember, deleteMember } = useFamily();
 
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [isAddMemberModalVisible, setIsAddMemberModalVisible] = useState(false);
@@ -493,7 +505,10 @@ function MainScreen() {
                   <Text className="text-3xl font-bold text-gray-900">CookNote</Text>
                 </View>
                 <TouchableOpacity 
-                  onPress={handleResetData}
+                  onPress={() => {
+                    triggerImpact();
+                    alert("✨ AI 智能推荐功能开发中，敬请期待！");
+                  }}
                   className="w-12 h-12 rounded-2xl bg-[#FF6B6B]/10 items-center justify-center"
                 >
                   <Sparkles size={24} color="#FF6B6B" />
@@ -514,6 +529,7 @@ function MainScreen() {
               ingredients={allAvailableIngredients}
               selected={selectedIngredient}
               onSelect={handleSelectIngredient}
+              frequencies={ingredientFrequencies}
             />
 
             {(selectedIngredient || searchQuery || selectedMemberId) && (
@@ -537,12 +553,13 @@ function MainScreen() {
       />
       
       <MemoizedAddRecipeModal 
-        isVisible={isAddModalVisible} 
-        onClose={handleCloseAddModal} 
+        isVisible={isAddModalVisible}
+        onClose={handleCloseAddModal}
         onSave={saveRecipe}
         initialRecipe={editingRecipe}
         availableIngredients={allAvailableIngredients}
         members={members}
+        ingredientFrequencies={ingredientFrequencies}
       />
       <MemoizedRecipeDetailModal 
         recipe={selectedRecipe} 
@@ -558,6 +575,8 @@ function MainScreen() {
         isVisible={isAddMemberModalVisible}
         onClose={() => setIsAddMemberModalVisible(false)}
         onAdd={addMember}
+        members={members}
+        onDelete={deleteMember}
       />
 
       <View className="absolute bottom-10 left-0 right-0 items-center px-6">

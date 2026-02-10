@@ -33,6 +33,7 @@ interface AddRecipeModalProps {
   availableIngredients?: Ingredient[]; // 允许外部传入动态标签列表
   aiProvider?: AISkillProvider; // 预留 AI 能力接口
   members?: FamilyMember[]; // 新增：从外部传入成员列表以保持同步
+  ingredientFrequencies?: Record<string, number>; // 新增：标签频率
 }
 
 export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({ 
@@ -42,7 +43,8 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   initialRecipe,
   availableIngredients = MOCK_INGREDIENTS, 
   aiProvider,
-  members = [] 
+  members = [],
+  ingredientFrequencies = {}
 }) => {
   const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
@@ -58,16 +60,15 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
   const [isFavorite, setIsFavorite] = useState(false);
   const [likedBy, setLikedBy] = useState<string[]>([]);
   const [manualCost, setManualCost] = useState<string>(''); // 手动输入的总成本
-  const [isManualCost, setIsManualCost] = useState(false); // 是否处于手动模式
   const [ingredientCostInputs, setIngredientCostInputs] = useState<Record<string, string>>({}); // 记录各原料成本的原始输入字符串
 
   // 计算标签成本总和
-  const totalIngredientsCost = React.useMemo(() => {
+  const autoCost = React.useMemo(() => {
     return selectedIngredients.reduce((sum, ing) => sum + (ing.cost || 0), 0);
   }, [selectedIngredients]);
 
-  // 最终显示的成本（如果手动修改过则用手动的，否则用自动计算的）
-  const displayTotalCost = isManualCost ? manualCost : totalIngredientsCost.toFixed(2);
+  // 最终显示的成本（优先使用手动，否则自动）
+  const displayTotalCost = manualCost !== '' ? manualCost : autoCost.toFixed(2);
 
   // 监听 initialRecipe 的变化，填充表单（编辑模式）
   React.useEffect(() => {
@@ -75,7 +76,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
       if (initialRecipe) {
         setName(initialRecipe.name);
         setImageUris(initialRecipe.imageUris || []);
-        // 加载时清洗数据，确保重量仅为数字，处理历史遗留的 "500g" 等字符串
+        // 加载时清洗数据，确保重量仅为数字
         const sanitizedIngredients = (initialRecipe.ingredients || []).map(ing => ({
           ...ing,
           amount: typeof ing.amount === 'string' 
@@ -97,16 +98,15 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
         setSteps(initialRecipe.steps || []);
         setIsFavorite(!!initialRecipe.isFavorite);
         setLikedBy(initialRecipe.likedBy || []);
+        
         if (initialRecipe.cost !== undefined) {
-          setManualCost(initialRecipe.cost.toString());
-          // 如果初始成本和标签之和不等，标记为手动
           const totalTags = sanitizedIngredients.reduce((sum, ing) => sum + (ing.cost || 0), 0);
-          if (Math.abs(initialRecipe.cost - totalTags) > 0.01) {
-            setIsManualCost(true);
+          // 只有当手动成本与自动计算不一致时，才设置手动成本
+          if (Math.abs(initialRecipe.cost - totalTags) > 0.01 || initialRecipe.cost === 0) {
+            setManualCost(initialRecipe.cost.toString());
           }
         }
       } else {
-        // 如果没有 initialRecipe，确保是干净的表单（新增模式）
         resetForm();
       }
     }
@@ -280,7 +280,6 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
     setIsFavorite(false);
     setLikedBy([]);
     setManualCost('');
-    setIsManualCost(false);
     setIngredientCostInputs({});
   }, []);
 
@@ -369,13 +368,15 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
 
             {/* 菜谱名称输入 */}
             <View className="mb-6 flex-row items-end">
-              <View className="flex-1 mr-4">
+              <View className="flex-1 min-w-0 mr-4">
                 <Text className="text-gray-900 font-bold text-lg mb-2">菜谱名称</Text>
                 <TextInput 
                   placeholder="给你的美味起个名字..."
                   className="bg-gray-100 px-5 py-4 rounded-2xl text-base"
                   value={name}
                   onChangeText={setName}
+                  // @ts-ignore - web only
+                  style={Platform.OS === 'web' ? { outline: 'none' } : {}}
                 />
               </View>
               <TouchableOpacity 
@@ -384,7 +385,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                   setIsFavorite(!isFavorite);
                   triggerImpact();
                 }}
-                className={`w-14 h-14 rounded-2xl items-center justify-center ${isFavorite ? 'bg-red-50' : 'bg-gray-100'}`}
+                className={`w-14 h-14 rounded-2xl items-center justify-center shrink-0 ${isFavorite ? 'bg-red-50' : 'bg-gray-100'}`}
               >
                 <Heart size={24} color={isFavorite ? '#FF6B6B' : '#9CA3AF'} fill={isFavorite ? '#FF6B6B' : 'transparent'} />
               </TouchableOpacity>
@@ -430,6 +431,7 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                 allIngredients={availableIngredients}
                 selectedIngredients={selectedIngredients.map(i => i.name)}
                 onToggle={toggleIngredient}
+                frequencies={ingredientFrequencies}
               />
 
               {/* 已选标签展示 - 优化为带用量的列表 */}
@@ -440,11 +442,11 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                       key={ing.id} 
                       className="flex-row items-center bg-gray-50 p-3 rounded-2xl border border-gray-100/50"
                     >
-                      <View className="w-2 h-2 rounded-full bg-[#FF6B6B] mr-3" />
-                      <Text className="flex-1 text-gray-800 font-bold text-sm">{ing.name}</Text>
+                      <View className="w-2 h-2 rounded-full bg-[#FF6B6B] mr-3 shrink-0" />
+                      <Text className="flex-1 min-w-0 text-gray-800 font-bold text-sm" numberOfLines={1}>{ing.name}</Text>
                       
                       {/* 重量输入 */}
-                      <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2">
+                      <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2 shrink-0">
                         <TextInput 
                           placeholder="0"
                           placeholderTextColor="#9CA3AF"
@@ -455,12 +457,14 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                             const val = text.replace(/[^0-9]/g, '');
                             updateIngredient(ing.id, { amount: val ? parseInt(val, 10) : undefined });
                           }}
+                          // @ts-ignore - web only
+                          style={Platform.OS === 'web' ? { outline: 'none' } : {}}
                         />
                         <Text className="text-[10px] text-gray-400 ml-1 font-bold">克</Text>
                       </View>
 
                       {/* 成本输入 */}
-                      <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2">
+                      <View className="flex-row items-center bg-white px-2 py-1 rounded-xl border border-gray-100 mr-2 shrink-0">
                         <Text className="text-[10px] text-gray-400 mr-1 font-bold">￥</Text>
                         <TextInput 
                           placeholder="0"
@@ -472,6 +476,8 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                             const val = text.replace(/[^0-9.]/g, '');
                             updateIngredient(ing.id, { cost: parseFloat(val) || 0 }, val);
                           }}
+                          // @ts-ignore - web only
+                          style={Platform.OS === 'web' ? { outline: 'none' } : {}}
                         />
                       </View>
 
@@ -493,10 +499,10 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                       <View>
                         <Text className="text-gray-900 font-bold text-sm">预估总成本</Text>
                         <Text className="text-gray-400 text-[10px] mt-0.5">
-                          {isManualCost ? '⚠️ 已手动修改' : '✨ 由下方标签自动汇总'}
+                          {manualCost !== '' ? '⚠️ 已手动修改' : '✨ 由下方标签自动汇总'}
                         </Text>
                       </View>
-                      <View className="flex-row items-center bg-white px-4 py-2 rounded-2xl border border-[#FF6B6B]/20">
+                      <View className="flex-row items-center bg-white px-4 py-2 rounded-2xl border border-[#FF6B6B]/20 shrink-0">
                         <Text className="text-[#FF6B6B] font-bold text-lg mr-1">￥</Text>
                         <TextInput 
                           placeholder="0"
@@ -506,14 +512,15 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                           value={displayTotalCost}
                           onChangeText={(text) => {
                             setManualCost(text.replace(/[^0-9.]/g, ''));
-                            setIsManualCost(true);
                           }}
+                          // @ts-ignore - web only
+                          style={Platform.OS === 'web' ? { outline: 'none' } : {}}
                         />
-                        {isManualCost && (
+                        {manualCost !== '' && (
                           <TouchableOpacity 
                             onPress={() => {
                               easeLayout();
-                              setIsManualCost(false);
+                              setManualCost('');
                             }}
                             className="ml-2 bg-[#FF6B6B]/10 p-1 rounded-full"
                           >
@@ -531,41 +538,51 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
                 <View className="flex-row items-center">
                   <TextInput 
                     placeholder="输入标签(如:羊肉)"
-                    className="flex-1 px-4 py-3 text-sm text-gray-800"
+                    className="flex-1 min-w-0 px-4 py-3 text-sm text-gray-800"
                     value={newIngredientName}
                     onChangeText={setNewIngredientName}
                     placeholderTextColor="#9CA3AF"
+                    // @ts-ignore - web only
+                    style={Platform.OS === 'web' ? { outline: 'none' } : {}}
                   />
-                  <View className="w-[1px] h-6 bg-gray-200" />
+                  <View className="w-[1px] h-6 bg-gray-200 shrink-0" />
                   
                   {/* 重量 */}
-                  <TextInput 
-                    placeholder="0"
-                    keyboardType="number-pad"
-                    className="w-12 px-2 py-3 text-sm text-[#FF6B6B] font-bold text-right"
-                    value={newIngredientAmount}
-                    onChangeText={(text) => setNewIngredientAmount(text.replace(/[^0-9]/g, ''))}
-                    placeholderTextColor="#9CA3AF"
-                  />
-                  <Text className="text-[10px] text-gray-400 mr-2 font-bold">克</Text>
+                  <View className="flex-row items-center shrink-0">
+                    <TextInput 
+                      placeholder="0"
+                      keyboardType="number-pad"
+                      className="w-10 px-1 py-3 text-sm text-[#FF6B6B] font-bold text-right"
+                      value={newIngredientAmount}
+                      onChangeText={(text) => setNewIngredientAmount(text.replace(/[^0-9]/g, ''))}
+                      placeholderTextColor="#9CA3AF"
+                      // @ts-ignore - web only
+                      style={Platform.OS === 'web' ? { outline: 'none' } : {}}
+                    />
+                    <Text className="text-[10px] text-gray-400 mr-2 font-bold shrink-0">克</Text>
+                  </View>
                   
-                  <View className="w-[1px] h-6 bg-gray-200" />
+                  <View className="w-[1px] h-6 bg-gray-200 shrink-0" />
                   
                   {/* 成本 */}
-                  <Text className="text-[10px] text-gray-400 ml-2 font-bold">￥</Text>
-                  <TextInput 
-                    placeholder="0"
-                    keyboardType="decimal-pad"
-                    className="w-12 px-2 py-3 text-sm text-[#FF6B6B] font-bold text-right"
-                    value={newIngredientCost}
-                    onChangeText={(text) => setNewIngredientCost(text.replace(/[^0-9.]/g, ''))}
-                    placeholderTextColor="#9CA3AF"
-                  />
+                  <View className="flex-row items-center shrink-0">
+                    <Text className="text-[10px] text-gray-400 ml-2 font-bold shrink-0">￥</Text>
+                    <TextInput 
+                      placeholder="0"
+                      keyboardType="decimal-pad"
+                      className="w-10 px-1 py-3 text-sm text-[#FF6B6B] font-bold text-right"
+                      value={newIngredientCost}
+                      onChangeText={(text) => setNewIngredientCost(text.replace(/[^0-9.]/g, ''))}
+                      placeholderTextColor="#9CA3AF"
+                      // @ts-ignore - web only
+                      style={Platform.OS === 'web' ? { outline: 'none' } : {}}
+                    />
+                  </View>
 
                   <TouchableOpacity 
                     onPress={handleAddNewIngredient}
                     activeOpacity={0.8}
-                    className="w-10 h-10 bg-[#FF6B6B] rounded-[20px] items-center justify-center shadow-sm shadow-[#FF6B6B]/40 ml-2"
+                    className="w-10 h-10 bg-[#FF6B6B] rounded-full items-center justify-center shadow-sm shadow-[#FF6B6B]/40 ml-2 shrink-0"
                   >
                     <Plus size={18} color="white" />
                   </TouchableOpacity>
@@ -619,14 +636,16 @@ export const AddRecipeModal: React.FC<AddRecipeModalProps> = ({
               <View className="flex-row items-center mt-2">
                 <TextInput 
                   placeholder="添加一步烹饪步骤..."
-                  className="flex-1 bg-gray-100 px-5 py-3 rounded-2xl text-base"
+                  className="flex-1 min-w-0 bg-gray-100 px-5 py-3 rounded-2xl text-base"
                   value={currentStep}
                   onChangeText={setCurrentStep}
                   onSubmitEditing={addStep}
+                  // @ts-ignore - web only
+                  style={Platform.OS === 'web' ? { outline: 'none' } : {}}
                 />
                 <TouchableOpacity 
                   onPress={addStep}
-                  className="ml-3 w-12 h-12 bg-[#FF6B6B]/10 rounded-2xl items-center justify-center"
+                  className="ml-3 w-12 h-12 bg-[#FF6B6B]/10 rounded-2xl items-center justify-center shrink-0"
                 >
                   <Plus size={24} color="#FF6B6B" />
                 </TouchableOpacity>

@@ -1,15 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ScrollView } from 'react-native';
-import { Search, Hash } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, TextInput, ScrollView, SectionList, Platform } from 'react-native';
+import { Search, Hash, TrendingUp } from 'lucide-react-native';
 import { Ingredient, IngredientCategory } from '../types/recipe';
 import { IngredientTag } from './IngredientTag';
 import { easeLayout } from '../utils/animations';
+import { triggerImpact } from '../services/haptics';
 
 interface IngredientBrowserProps {
   allIngredients: Ingredient[];
   selectedIngredients: string[];
   onToggle: (ing: Ingredient) => void;
   singleSelect?: boolean;
+  frequencies?: Record<string, number>;
 }
 
 const CATEGORIES: IngredientCategory[] = ['肉禽类', '蔬菜类', '调料类', '海鲜类', '主食类', '其他'];
@@ -18,26 +20,38 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
   allIngredients, 
   selectedIngredients, 
   onToggle,
-  singleSelect = false
+  singleSelect = false,
+  frequencies = {}
 }) => {
   const [search, setSearch] = useState('');
   
-  // 模糊匹配逻辑
+  // 模糊匹配 & 排序逻辑
   const filtered = useMemo(() => {
-    if (!search.trim()) return allIngredients;
+    let list = [...allIngredients];
+    
+    // 如果没有搜索，则按频率全局简单预排（可选，这里主要在分类内排）
+    if (!search.trim()) {
+      return list;
+    }
+
     const query = search.trim().toLowerCase();
-    return allIngredients.filter(ing => 
+    return list.filter(ing => 
       ing.name.toLowerCase().includes(query)
     ).sort((a, b) => {
+      // 搜索匹配度优先
       const aStarts = a.name.toLowerCase().startsWith(query);
       const bStarts = b.name.toLowerCase().startsWith(query);
       if (aStarts && !bStarts) return -1;
       if (!aStarts && bStarts) return 1;
-      return 0;
+      
+      // 其次按频率排序
+      const freqA = frequencies[a.name] || 0;
+      const freqB = frequencies[b.name] || 0;
+      return freqB - freqA;
     });
-  }, [allIngredients, search]);
+  }, [allIngredients, search, frequencies]);
 
-  const categorized = useMemo(() => {
+  const sections = useMemo(() => {
     const map: Record<string, Ingredient[]> = {};
     filtered.forEach(ing => {
       const cat = ing.category || '其他';
@@ -46,10 +60,15 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
     });
     
     return CATEGORIES.filter(cat => map[cat]).map(cat => ({
-      name: cat,
-      items: map[cat]
+      title: cat,
+      // 在分类内部按频率排序
+      data: [map[cat].sort((a, b) => {
+        const freqA = frequencies[a.name] || 0;
+        const freqB = frequencies[b.name] || 0;
+        return freqB - freqA;
+      })]
     }));
-  }, [filtered]);
+  }, [filtered, frequencies]);
 
   const handleSearchChange = (text: string) => {
     // 简单的布局动画让搜索结果出现时不跳跃
@@ -57,49 +76,74 @@ export const IngredientBrowser: React.FC<IngredientBrowserProps> = ({
     setSearch(text);
   };
 
+  const renderSectionHeader = ({ section: { title, data } }: any) => (
+    <View className="bg-[#fcfcfc] py-3 flex-row items-center border-b border-gray-50 mb-3">
+      <View className="w-1 h-3 bg-[#FF6B6B] rounded-full mr-2" />
+      <Text className="text-sm font-bold text-gray-900">{title}</Text>
+      <Text className="text-gray-400 text-[10px] ml-2 font-medium">{data[0].length}</Text>
+    </View>
+  );
+
+  const renderItem = ({ item }: { item: Ingredient[] }) => (
+    <View className="flex-row flex-wrap pb-4">
+      {item.map(ing => {
+        const freq = frequencies[ing.name] || 0;
+        return (
+          <IngredientTag
+            key={ing.id}
+            name={ing.name}
+            isSelected={selectedIngredients.includes(ing.name)}
+            onPress={() => {
+              triggerImpact();
+              onToggle(ing);
+            }}
+            // 如果频率很高，可以加个小装饰（可选）
+            showDot={freq > 5}
+          />
+        );
+      })}
+    </View>
+  );
+
   return (
-    <View className="bg-gray-50/50 rounded-[32px] p-5 border border-gray-100">
-      <View className="flex-row items-center bg-white rounded-2xl px-4 py-2.5 mb-5 shadow-sm shadow-black/[0.03] border border-gray-50">
-        <Search size={18} color="#9CA3AF" />
-        <TextInput 
-          placeholder="快速查找原料..."
-          className="flex-1 ml-2 text-base text-gray-800"
-          value={search}
-          onChangeText={handleSearchChange}
-          placeholderTextColor="#9CA3AF"
-          clearButtonMode="while-editing"
-        />
+    <View className="bg-white rounded-[32px] p-2 border border-gray-100 overflow-hidden">
+      {/* 搜索栏保持固定 */}
+      <View className="px-3 pt-3 pb-2">
+        <View className="flex-row items-center bg-gray-50 rounded-2xl px-4 py-2.5 mb-2 shadow-sm shadow-black/[0.01] border border-gray-100">
+          <View className="shrink-0">
+            <Search size={18} color="#9CA3AF" />
+          </View>
+          <TextInput 
+            placeholder="快速查找原料..."
+            className="flex-1 min-w-0 ml-2 text-base text-gray-800"
+            value={search}
+            onChangeText={handleSearchChange}
+            placeholderTextColor="#9CA3AF"
+            clearButtonMode="while-editing"
+            // @ts-ignore - web only
+            style={Platform.OS === 'web' ? { outline: 'none' } : {}}
+          />
+        </View>
       </View>
       
-      {categorized.map(cat => (
-        <View key={cat.name} className="mb-6">
-          <View className="flex-row items-center mb-3 ml-1">
-            <View className="w-1 h-3 bg-[#FF6B6B] rounded-full mr-2" />
-            <Text className="text-sm font-bold text-gray-900">{cat.name}</Text>
-            <Text className="text-gray-400 text-[10px] ml-2 font-medium">{cat.items.length}</Text>
+      <View className="px-3 pb-4">
+        {sections.map((section, index) => (
+          <View key={section.title}>
+            {renderSectionHeader({ section })}
+            {renderItem({ item: section.data[0] })}
           </View>
-          <View className="flex-row flex-wrap">
-            {cat.items.map(ing => (
-              <IngredientTag
-                key={ing.id}
-                name={ing.name}
-                isSelected={selectedIngredients.includes(ing.name)}
-                onPress={() => onToggle(ing)}
-              />
-            ))}
-          </View>
-        </View>
-      ))}
+        ))}
 
-      {filtered.length === 0 && (
-        <View className="items-center py-10">
-          <View className="w-16 h-16 bg-gray-100 rounded-full items-center justify-center mb-3">
-             <Hash size={24} color="#D1D5DB" />
+        {sections.length === 0 && (
+          <View className="items-center py-10">
+            <View className="w-16 h-16 bg-gray-50 rounded-full items-center justify-center mb-3">
+               <Hash size={24} color="#D1D5DB" />
+            </View>
+            <Text className="text-gray-400 text-sm font-medium">未找到相关标签</Text>
+            <Text className="text-gray-300 text-xs mt-1">您可以尝试手动添加一个</Text>
           </View>
-          <Text className="text-gray-400 text-sm font-medium">未找到相关标签</Text>
-          <Text className="text-gray-300 text-xs mt-1">您可以尝试手动添加一个</Text>
-        </View>
-      )}
+        )}
+      </View>
     </View>
   );
 };

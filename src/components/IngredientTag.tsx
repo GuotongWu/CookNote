@@ -12,6 +12,7 @@ interface IngredientTagProps {
   onRemove?: () => void;
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
   className?: string;
+  showDot?: boolean; // 新增：显示频率高的小圆点
 }
 
 export const IngredientTag: React.FC<IngredientTagProps> = ({ 
@@ -22,7 +23,8 @@ export const IngredientTag: React.FC<IngredientTagProps> = ({
   onPress, 
   onRemove, 
   variant = 'primary',
-  className = ''
+  className = '',
+  showDot = false
 }) => {
   const handlePress = () => {
     if (onPress) {
@@ -70,6 +72,9 @@ export const IngredientTag: React.FC<IngredientTagProps> = ({
         elevation: 1
       }}
     >
+      {showDot && !isSelected && (
+        <View className="w-1.5 h-1.5 rounded-full bg-orange-400 mr-1.5" />
+      )}
       <Text className={`text-xs font-semibold ${getTextColor()}`}>
         {name}
         {amount !== undefined && amount !== null && (
