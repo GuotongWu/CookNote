@@ -26,11 +26,15 @@ export const AIService = {
      * process.env.EXPO_PUBLIC_AI_API_URL: Vercel 中转接口或 AI 供应商接口地址
      * process.env.EXPO_PUBLIC_USE_MOCK: 是否强制开启本地模拟
      */
-    const API_URL = process.env.EXPO_PUBLIC_AI_API_URL || '';
+    // 优先使用环境变量，如果没有则尝试使用相对路径（适配 Vercel Web 部署）
+    const API_URL = process.env.EXPO_PUBLIC_AI_API_URL || '/api/analyze';
     const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === 'true';
 
+    console.log('AI Analysis starting...', { API_URL, USE_MOCK });
+
     try {
-      if (USE_MOCK || !API_URL) {
+      if (USE_MOCK) {
+        console.log('Using Mock Data (USE_MOCK is true)');
         // 模拟网络延迟
         await new Promise(resolve => setTimeout(resolve, 3500));
         
